@@ -12,6 +12,8 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 ## Technology
 
 - Django
+- Django MVT architecture
+- Django ORM
 - Semantic HTML5
 - CSS3
 - SQLite for local development
@@ -51,12 +53,17 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 ## Project Structure
 
 ```text
-manage.py                 Django command-line utility
-portofolio/               Django project configuration
-templates/index.html      Portfolio page markup
-static/css/style.css      Portfolio styles
-static/img/               Profile and project images
-requirements.txt          Python dependencies
+manage.py                  Django command-line utility
+portofolio/                Django project configuration
+templates/index.html       Portfolio page markup
+static/css/style.css       Portfolio styles
+static/img/                Profile and project images
+requirements.txt           Python dependencies
+main/models.py             Experience database model
+main/views.py              View logic and template context
+main/urls.py               Application URL routes
+templates/index.html       Main portfolio page
+templates/experience.html  Experience page template
 ```
 
 ## Weekly Progress
@@ -66,6 +73,7 @@ requirements.txt          Python dependencies
 - added Finished Project section
 - added Ongoing Project section
 ### Week 2
+- Implemented Tutorial 2
 
 ### Assignment 1
 1. So why I used `<section>`, `<header>`, `<main>` and many others so that we can differentiate each components according to its semantic meaning, making it more readable for me. Also, in modern website we need to think about accessibility and semantic tags allow screen readers to read each components' meaning. 
