@@ -32,3 +32,27 @@ class Experience(models.Model):
     @property
     def is_ongoing(self):
         return self.ended_at is None
+
+
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ("finished", "Finished"),
+        ("ongoing", "In progress"),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="ongoing",
+    )
+    image_path = models.CharField(max_length=255, blank=True)
+    external_url = models.URLField(blank=True)
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_finished(self):
+        return self.status == "finished"
