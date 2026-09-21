@@ -194,6 +194,33 @@ class MainTest(TestCase):
         self.assertTrue(response.context["is_edit"])
         self.assertContains(response, self.finished_project.title)
 
+    def test_projects_page_has_edit_controls(self):
+        response = self.client.get(reverse("main:show_projects"))
+
+        self.assertContains(
+            response,
+            reverse("main:update_project", args=[self.finished_project.pk]),
+        )
+
+    def test_project_create_form_uses_create_mode(self):
+        response = self.client.get(reverse("main:create_project"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add New Project")
+        self.assertContains(response, reverse("main:create_project"))
+        self.assertNotContains(response, "Edit Project")
+
+    def test_project_update_form_uses_edit_mode(self):
+        response = self.client.get(
+            reverse("main:update_project", args=[self.finished_project.pk])
+        )
+
+        self.assertContains(response, "Edit Project")
+        self.assertContains(
+            response,
+            reverse("main:update_project", args=[self.finished_project.pk]),
+        )
+
     def test_update_project(self):
         response = self.client.post(
             reverse("main:update_project", args=[self.finished_project.pk]),

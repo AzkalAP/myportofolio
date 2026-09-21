@@ -60,6 +60,11 @@
                                         </a>
                                     {% endif %}
 
+                                    <a href="{% url 'main:update_project' project.id %}"
+                                       class="button">
+                                        Edit Project
+                                    </a>
+
                                     {% include "components/project_delete_modal.html" with project=project %}
                                 </div>
                             </div>
