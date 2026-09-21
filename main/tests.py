@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from main.forms import ExperienceForm
 from main.models import Experience, Project
 
 
@@ -61,6 +62,82 @@ class MainTest(TestCase):
         response = self.client.get(reverse("main:show_experience"))
 
         self.assertContains(response, "No experience has been added yet.")
+
+    def test_experience_json_endpoint(self):
+        response = self.client.get(reverse("main:get_experience_json"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "application/json")
+        self.assertContains(response, self.experience.title)
+
+    def test_experience_page_uses_json_data(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        experience_ids = [experience.pk for experience in response.context["experience_list"]]
+        self.assertIn(self.experience.pk, experience_ids)
+        self.assertContains(response, self.experience.title)
+
+    def test_create_experience(self):
+        response = self.client.post(
+            reverse("main:create_experience"),
+            {
+                "title": "Teaching Assistant",
+                "description": "Helped students learn programming.",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.assertTrue(Experience.objects.filter(title="Teaching Assistant").exists())
+
+    def test_create_experience_requires_valid_data(self):
+        form = ExperienceForm(
+            {
+                "title": "",
+                "description": "Missing title.",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("title", form.errors)
+        self.assertFalse(Experience.objects.filter(title="").exists())
+
+    def test_update_experience(self):
+        response = self.client.post(
+            reverse("main:update_experience", args=[self.experience.pk]),
+            {
+                "title": "Updated Experience",
+                "description": "Updated description.",
+                "category": "volunteer",
+                "thumbnail": "",
+                "ended_at": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.experience.refresh_from_db()
+        self.assertEqual(self.experience.title, "Updated Experience")
+        self.assertEqual(self.experience.category, "volunteer")
+
+    def test_delete_experience(self):
+        response = self.client.post(
+            reverse("main:delete_experience", args=[self.experience.pk])
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.assertFalse(Experience.objects.filter(pk=self.experience.pk).exists())
+
+    def test_delete_experience_requires_post(self):
+        response = self.client.get(
+            reverse("main:delete_experience", args=[self.experience.pk])
+        )
+
+        self.assertEqual(response.status_code, 405)
 
     def test_completed_experience(self):
         self.experience.ended_at = timezone.now()
