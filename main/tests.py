@@ -176,7 +176,10 @@ class MainTest(TestCase):
 
         self.assertFalse(self.experience.is_ongoing)
         self.assertContains(response, "Completed")
-        self.assertNotContains(response, "Ongoing")
+        self.assertContains(
+            response,
+            '<p class="experience-status">Completed</p>',
+        )
 
     def test_projects_url_is_accessible(self):
         response = self.client.get(reverse("main:show_projects"))
@@ -278,7 +281,7 @@ class MainTest(TestCase):
 
         self.assertContains(response, '/static/img/infografis-kastratpacil.png')
         self.assertContains(response, "instagram.com/p/DXG__RDky7O/")
-        self.assertContains(response, 'alt="Image for Infographic @Kastratpacil"')
+        self.assertContains(response, 'alt="Image of Infographic @Kastratpacil"')
 
     def test_ongoing_project_has_no_image(self):
         response = self.client.get(reverse("main:show_projects"))
