@@ -184,6 +184,54 @@ class MainTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "projects.html")
 
+    def test_update_project_form_page(self):
+        response = self.client.get(
+            reverse("main:update_project", args=[self.finished_project.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "projects_form.html")
+        self.assertTrue(response.context["is_edit"])
+        self.assertContains(response, self.finished_project.title)
+
+    def test_update_project(self):
+        response = self.client.post(
+            reverse("main:update_project", args=[self.finished_project.pk]),
+            {
+                "title": "Updated Project",
+                "description": "Updated project description.",
+                "status": "ongoing",
+                "image_path": "img/updated-project.png",
+                "external_url": "https://example.com/updated-project",
+            },
+        )
+
+        self.assertRedirects(response, reverse("main:show_projects"))
+        self.finished_project.refresh_from_db()
+        self.assertEqual(self.finished_project.title, "Updated Project")
+        self.assertEqual(self.finished_project.status, "ongoing")
+
+    def test_update_project_requires_valid_data(self):
+        response = self.client.post(
+            reverse("main:update_project", args=[self.finished_project.pk]),
+            {
+                "title": "",
+                "description": "Missing title.",
+                "status": "finished",
+                "image_path": "",
+                "external_url": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.finished_project.refresh_from_db()
+        self.assertEqual(self.finished_project.title, "Infographic @Kastratpacil")
+
+    def test_update_nonexistent_project_returns_404(self):
+        response = self.client.get(reverse("main:update_project", args=[999999]))
+
+        self.assertEqual(response.status_code, 404)
+
     def test_project_model(self):
         self.assertEqual(str(self.finished_project), "Infographic @Kastratpacil")
         self.assertTrue(self.finished_project.is_finished)
