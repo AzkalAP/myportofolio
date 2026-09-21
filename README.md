@@ -68,23 +68,37 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 manage.py                  Django command-line utility
 portofolio/                Django project configuration
 templates/index.html       Portfolio page markup
+templates/base.html        Shared HTML layout and navigation
+templates/experience.html  Experience listing and management controls
+templates/experience_form.html  Experience add/edit form
+templates/projects.html    Project listing and management controls
+templates/projects_form.html  Project add/edit form
+templates/components/      Reusable delete confirmation components
 static/css/style.css       Portfolio styles
 static/img/                Profile and project images
 requirements.txt           Python dependencies
-main/models.py             Experience database model
-main/views.py              View logic and template context
+main/models.py             Experience and Project database models
+main/forms.py              Experience and Project forms
+main/views.py              View logic and JSON endpoints
 main/urls.py               Application URL routes
 main/migrations/           Database migration files
 main/tests.py              Experience and Project tests
-templates/experience.html  Experience page template
-templates/projects.html    Dynamic Projects page template
 ```
 
 ## Pages
 
 - `/` - Main portfolio page
 - `/experience/` - Database-backed experience page
+- `/experience/add/` - Add an experience record
+- `/experience/<uuid>/edit/` - Edit an experience record
 - `/projects/` - Database-backed projects page
+- `/projects/add/` - Add a project record
+- `/projects/<id>/edit/` - Edit a project record
+
+## JSON Endpoints
+
+- `/api/experience/` - Serialized Experience records
+- `/api/projects/` - Serialized Project records, with optional `?title=` filtering
 
 ## Testing
 
@@ -94,7 +108,16 @@ Run the test suite with:
 python manage.py test main
 ```
 
-The tests cover the Experience and Project models, page accessibility, database-backed rendering, project statuses, finished-project links and images, ongoing projects without images, and empty-state behavior.
+The tests cover:
+
+- Experience and Project models.
+- Page accessibility and template rendering.
+- Experience and Project form validation.
+- Creating, editing, and deleting Experience records.
+- Creating and editing Project records.
+- Experience and Project JSON endpoints.
+- Project search and filtering.
+- Status display, images, external links, and empty states.
 
 ## Weekly Progress
 ### Week 1
@@ -115,6 +138,14 @@ The tests cover the Experience and Project models, page accessibility, database-
 - Added tests for the Experience and Projects MVT flows.
 - Verified the application with Django system checks and automated tests.
 
+### Week 3
+- Refactored full-page templates to extend the shared `base.html` layout.
+- Added Experience create, edit, delete, and JSON endpoint functionality.
+- Added Project editing with a shared add/edit form.
+- Added reusable delete confirmation components for Experience and Project records.
+- Added tests for forms, CRUD operations, JSON responses, routes, and template controls.
+- Updated the README with the current project structure, routes, endpoints, and test coverage.
+
 ### Assignment 1
 1. So why I used `<section>`, `<header>`, `<main>` and many others so that we can differentiate each components according to its semantic meaning, making it more readable for me. Also, in modern website we need to think about accessibility and semantic tags allow screen readers to read each components' meaning. 
 2. The main challenge was keeping the grid layout from looking too cramped on a phone screen. I used a CSS media query for screens under 600px to force the grid into a single column. I chose to prioritize my name and photo to show up at the very top by reordering the grid areas, ensuring visitors see my main identity first without needing to scroll.
@@ -126,6 +157,14 @@ The tests cover the Experience and Project models, page accessibility, database-
 2. The data should be stored in a model instead of being written directly in the template because project information can change while the page design stays the same. Using a model makes the application easier to maintain because projects can be added, edited, or removed in the database without rewriting the HTML template. It also supports future development such as Django Admin, searching, filtering by project status, project detail pages, and sorting. The model stores the data, the view retrieves it, and the template displays it.
 
 3. `makemigrations` and `migrate` have different purposes. `makemigrations` detects changes in the Django models and creates migration files that describe the database changes. `migrate` applies those migration files to the actual database. For example, if I add a `featured = models.BooleanField(default=False)` field to the `Project` model, I need to run `python manage.py makemigrations` to create the migration file and then `python manage.py migrate` to apply the change to the database and add the new column.
+
+### Assignment 3
+
+1. Django's `ModelForm` connects an HTML form directly to a model. It automatically creates fields, validates submitted data, and saves valid data, so we do not need to manually define and validate every HTML field. The `{% csrf_token %}` tag protects POST forms from Cross-Site Request Forgery attacks. Django checks this token to confirm that the request came from the application itself.
+
+2. JSON is preferred because it is lightweight, readable, and easy for JavaScript to process. Its structure matches JavaScript objects and arrays naturally. XML is usually more verbose because it requires opening and closing tags for its data.
+
+3. The view first retrieves portfolio objects from the database. Django's serializer converts those model objects into JSON, and the view returns the result with the `application/json` content type. Serialization is necessary because Django model instances are Python objects, not JSON data. It converts their fields into a standard format that browsers and other applications can understand.
 
 ## AI Disclosure
 
