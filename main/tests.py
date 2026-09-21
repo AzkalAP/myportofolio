@@ -77,6 +77,36 @@ class MainTest(TestCase):
         self.assertIn(self.experience.pk, experience_ids)
         self.assertContains(response, self.experience.title)
 
+    def test_experience_page_has_management_controls(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        self.assertContains(response, reverse("main:create_experience"))
+        self.assertContains(
+            response,
+            reverse("main:update_experience", args=[self.experience.pk]),
+        )
+        self.assertContains(
+            response,
+            reverse("main:delete_experience", args=[self.experience.pk]),
+        )
+
+    def test_experience_create_form_page(self):
+        response = self.client.get(reverse("main:create_experience"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "experience_form.html")
+        self.assertContains(response, "Add New Experience")
+
+    def test_experience_update_form_page(self):
+        response = self.client.get(
+            reverse("main:update_experience", args=[self.experience.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "experience_form.html")
+        self.assertContains(response, "Edit Experience")
+        self.assertContains(response, self.experience.title)
+
     def test_create_experience(self):
         response = self.client.post(
             reverse("main:create_experience"),
