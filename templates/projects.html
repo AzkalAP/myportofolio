@@ -12,11 +12,13 @@
 
                 <div class="project-header">
                     <h1>Projects</h1>
-                    <a href="{% url 'main:create_project' %}"
-                       class="button project-add-button">
-                        <span aria-hidden="true">+</span>
-                        Add Project
-                    </a>
+                    {% if user.is_superuser %}
+                        <a href="{% url 'main:create_project' %}"
+                           class="button project-add-button">
+                            <span aria-hidden="true">+</span>
+                            Add Project
+                        </a>
+                    {% endif %}
                 </div>
 
                 <form method="get"
@@ -50,6 +52,7 @@
                             </p>
 
                             <div class="project-card-actions">
+                                {% include "components/project_star.html" with project=project %}
                                 <div class="project-actions">
                                     {% if project.external_url %}
                                         <a href="{{ project.external_url }}"
@@ -65,7 +68,9 @@
                                         Edit Project
                                     </a>
 
-                                    {% include "components/project_delete_modal.html" with project=project %}
+                                    {% if user.is_superuser %}
+                                        {% include "components/project_delete_modal.html" with project=project %}
+                                    {% endif %}
                                 </div>
                             </div>
                         </article>

@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -8,6 +9,15 @@ from main.models import Experience, Project
 
 class MainTest(TestCase):
     def setUp(self):
+        self.member = User.objects.create_user(
+            username="member",
+            password="StrongPass123!",
+        )
+        self.owner = User.objects.create_superuser(
+            username="owner",
+            email="owner@example.com",
+            password="StrongPass123!",
+        )
         self.experience = Experience.objects.create(
             title="SBF Kastrat Staff - BEM Fasilkom UI",
             description="Contributing to the Kastrat staff team through organizational-related work as SBF staff in Kastrat Fasilkom UI.",
@@ -33,6 +43,88 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "index.html")
         self.assertNotContains(response, self.experience.title)
         self.assertContains(response, f'href="{reverse("main:show_experience")}"')
+        self.assertContains(response, "No active login session / Cookie not found")
+
+    def test_auth_navigation_changes_with_login_state(self):
+        response = self.client.get(reverse("main:show_main"))
+
+        self.assertContains(response, reverse("main:login"))
+        self.assertContains(response, reverse("main:register"))
+        self.assertNotContains(response, reverse("main:logout"))
+
+        self.client.force_login(self.member)
+        response = self.client.get(reverse("main:show_main"))
+
+        self.assertContains(response, "member")
+        self.assertContains(response, reverse("main:logout"))
+        self.assertNotContains(response, reverse("main:register"))
+
+    def test_register_creates_user_and_shows_message(self):
+        response = self.client.post(
+            reverse("main:register"),
+            {
+                "username": "new-member",
+                "password1": "SecureExamplePass123!",
+                "password2": "SecureExamplePass123!",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("main:login"))
+        self.assertContains(response, "Account created successfully")
+        created_user = User.objects.get(username="new-member")
+        self.assertTrue(created_user.check_password("SecureExamplePass123!"))
+
+    def test_register_displays_validation_errors(self):
+        response = self.client.post(
+            reverse("main:register"),
+            {
+                "username": "new-member",
+                "password1": "SecureExamplePass123!",
+                "password2": "DifferentExamplePass123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("password2", response.context["form"].errors)
+        self.assertFalse(User.objects.filter(username="new-member").exists())
+
+    def test_login_sets_cookie_and_session(self):
+        response = self.client.post(
+            reverse("main:login"),
+            {"username": "member", "password": "StrongPass123!"},
+        )
+
+        self.assertRedirects(response, reverse("main:show_main"))
+        self.assertIn("last_login", response.cookies)
+        self.assertIn("sessionid", response.cookies)
+        profile_response = self.client.get(reverse("main:show_main"))
+        self.assertContains(
+            profile_response,
+            response.cookies["last_login"].value,
+        )
+
+    def test_login_rejects_invalid_credentials(self):
+        response = self.client.post(
+            reverse("main:login"),
+            {"username": "member", "password": "wrong-password"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please enter a correct username and password")
+
+    def test_logout_clears_login_cookie_and_session(self):
+        self.client.force_login(self.member)
+        self.client.cookies["last_login"] = "2026-09-28 12:00:00"
+
+        response = self.client.get(reverse("main:logout"))
+
+        self.assertRedirects(response, reverse("main:show_main"))
+        self.assertEqual(response.cookies["last_login"]["max-age"], 0)
+        self.assertEqual(response.cookies["sessionid"]["max-age"], 0)
+        profile_response = self.client.get(reverse("main:show_main"))
+        self.assertContains(profile_response, "No active login session / Cookie not found")
+        self.assertNotContains(profile_response, "member</span>")
 
     def test_nonexistent_page_returns_404(self):
         response = self.client.get("/a-page-that-does-not-exist/")
@@ -206,6 +298,7 @@ class MainTest(TestCase):
         )
 
     def test_project_create_form_uses_create_mode(self):
+        self.client.force_login(self.owner)
         response = self.client.get(reverse("main:create_project"))
 
         self.assertEqual(response.status_code, 200)
@@ -275,6 +368,114 @@ class MainTest(TestCase):
         self.assertContains(response, self.ongoing_project.title)
         self.assertContains(response, "Finished")
         self.assertContains(response, "In progress")
+
+    def test_project_controls_are_visible_only_to_superuser(self):
+        response = self.client.get(reverse("main:show_projects"))
+        self.assertNotContains(response, reverse("main:create_project"))
+        self.assertNotContains(
+            response,
+            reverse("main:delete_project", args=[self.finished_project.pk]),
+        )
+
+        self.client.force_login(self.member)
+        response = self.client.get(reverse("main:show_projects"))
+        self.assertNotContains(response, reverse("main:create_project"))
+        self.assertNotContains(
+            response,
+            reverse("main:delete_project", args=[self.finished_project.pk]),
+        )
+
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("main:show_projects"))
+        self.assertContains(response, reverse("main:create_project"))
+        self.assertContains(
+            response,
+            reverse("main:delete_project", args=[self.finished_project.pk]),
+        )
+
+    def test_create_project_requires_login_and_superuser(self):
+        create_url = reverse("main:create_project")
+        response = self.client.get(create_url)
+        self.assertRedirects(response, f"{reverse('main:login')}?next={create_url}")
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(create_url).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                create_url,
+                {
+                    "title": "Unauthorized project",
+                    "description": "Should not be created.",
+                    "status": "finished",
+                },
+            ).status_code,
+            403,
+        )
+        self.assertFalse(Project.objects.filter(title="Unauthorized project").exists())
+
+    def test_superuser_can_create_project(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("main:create_project"),
+            {
+                "title": "Authorized project",
+                "description": "Created by the portfolio owner.",
+                "status": "finished",
+                "image_path": "",
+                "external_url": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("main:show_projects"))
+        self.assertTrue(Project.objects.filter(title="Authorized project").exists())
+
+    def test_delete_project_requires_login_superuser_and_post(self):
+        delete_url = reverse("main:delete_project", args=[self.finished_project.pk])
+        response = self.client.post(delete_url)
+        self.assertRedirects(response, f"{reverse('main:login')}?next={delete_url}")
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(delete_url).status_code, 403)
+        self.assertTrue(Project.objects.filter(pk=self.finished_project.pk).exists())
+
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(delete_url).status_code, 405)
+        response = self.client.post(delete_url)
+        self.assertRedirects(response, reverse("main:show_projects"))
+        self.assertFalse(Project.objects.filter(pk=self.finished_project.pk).exists())
+
+    def test_authenticated_user_can_toggle_project_star(self):
+        toggle_url = reverse("main:toggle_star", args=[self.finished_project.pk])
+        self.client.force_login(self.member)
+
+        response = self.client.post(toggle_url)
+        self.assertRedirects(response, reverse("main:show_projects"))
+        self.assertTrue(self.finished_project.starred_by.filter(pk=self.member.pk).exists())
+
+        self.client.post(toggle_url)
+        self.assertFalse(self.finished_project.starred_by.filter(pk=self.member.pk).exists())
+
+    def test_star_requires_login_and_post(self):
+        toggle_url = reverse("main:toggle_star", args=[self.finished_project.pk])
+        response = self.client.post(toggle_url)
+
+        self.assertRedirects(response, f"{reverse('main:login')}?next={toggle_url}")
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(toggle_url).status_code, 405)
+        self.assertFalse(self.finished_project.starred_by.exists())
+
+    def test_projects_json_serializes_starred_user_by_natural_key(self):
+        self.finished_project.starred_by.add(self.member)
+
+        response = self.client.get(reverse("main:get_projects_json"))
+        serialized_projects = response.json()
+        serialized_project = next(
+            item
+            for item in serialized_projects
+            if item["pk"] == self.finished_project.pk
+        )
+
+        self.assertEqual(serialized_project["fields"]["starred_by"], [["member"]])
 
     def test_finished_project_has_image_and_external_link(self):
         response = self.client.get(reverse("main:show_projects"))

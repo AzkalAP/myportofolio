@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block meta %}
+    <title>Login - {{ name }}</title>
+{% endblock meta %}
+
+{% block content %}
+    <main class="experience-section">
+        <section class="container auth-form">
+            <h1>Login</h1>
+            {% for message in messages %}
+                <p class="auth-message">{{ message }}</p>
+            {% endfor %}
+            <form method="post" class="project-form">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% for error in field.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                    <p class="form-error">{{ error }}</p>
+                {% endfor %}
+                <button type="submit" class="button">Login</button>
+            </form>
+            <p class="auth-switch">No account yet? <a href="{% url 'main:register' %}">Register here</a>.</p>
+        </section>
+    </main>
+{% endblock content %}
