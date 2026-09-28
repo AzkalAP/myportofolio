@@ -12,6 +12,21 @@ from django.views.decorators.http import require_POST
 from main.forms import ExperienceForm, ProjectForm
 from main.models import Experience, Project
 
+
+def _is_editor(user):
+    return user.groups.filter(name="Editor").exists()
+
+
+def _require_owner(user):
+    if not user.is_superuser:
+        raise PermissionDenied
+
+
+def _require_editor_or_owner(user):
+    if not user.is_superuser and not _is_editor(user):
+        raise PermissionDenied
+
+
 def show_main(request):
     last_login = request.COOKIES.get("last_login") or (
         "No active login session / Cookie not found"
@@ -79,11 +94,14 @@ def show_experience(request):
     context = {
         "name": "Azkal Azkiya Arifi Putra",
         "experience_list": experiences,
+        "is_editor": _is_editor(request.user),
     }
     return render(request, "experience.html", context)
 
 
+@login_required(login_url="main:login")
 def create_experience(request):
+    _require_owner(request.user)
     form = ExperienceForm(request.POST or None)
 
     if request.method == "POST" and form.is_valid():
@@ -99,7 +117,9 @@ def create_experience(request):
     return render(request, "experience_form.html", context)
 
 
+@login_required(login_url="main:login")
 def update_experience(request, experience_id):
+    _require_editor_or_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     form = ExperienceForm(request.POST or None, instance=experience)
 
@@ -117,8 +137,10 @@ def update_experience(request, experience_id):
     return render(request, "experience_form.html", context)
 
 
+@login_required(login_url="main:login")
 @require_POST
 def delete_experience(request, experience_id):
+    _require_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     experience.delete()
     messages.success(request, "Experience berhasil dihapus!")
@@ -139,15 +161,15 @@ def show_projects(request):
         "name": "Azkal Azkiya Arifi Putra",
         "project_list": projects,
         "title_query": title_query,
+        "is_editor": _is_editor(request.user),
     }
 
     return render(request, "projects.html", context)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="main:login")
 def create_project(request):
-    if not request.user.is_superuser:
-        raise PermissionDenied
+    _require_owner(request.user)
 
     form = ProjectForm(request.POST or None)
 
@@ -163,7 +185,9 @@ def create_project(request):
     return render(request, "projects_form.html", context)
 
 
+@login_required(login_url="main:login")
 def update_project(request, project_id):
+    _require_editor_or_owner(request.user)
     project = get_object_or_404(Project, pk=project_id)
     form = ProjectForm(request.POST or None, instance=project)
 
@@ -181,11 +205,10 @@ def update_project(request, project_id):
     return render(request, "projects_form.html", context)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="main:login")
 @require_POST
 def delete_project(request, project_id):
-    if not request.user.is_superuser:
-        raise PermissionDenied
+    _require_owner(request.user)
 
     project = get_object_or_404(Project, pk=project_id)
     project.delete()
@@ -193,7 +216,7 @@ def delete_project(request, project_id):
     return redirect("main:show_projects")
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="main:login")
 @require_POST
 def toggle_star(request, project_id):
     project = get_object_or_404(Project, pk=project_id)

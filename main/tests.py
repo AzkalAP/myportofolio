@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +18,12 @@ class MainTest(TestCase):
             email="owner@example.com",
             password="StrongPass123!",
         )
+        self.editor = User.objects.create_user(
+            username="editor",
+            password="StrongPass123!",
+        )
+        editor_group = Group.objects.create(name="Editor")
+        self.editor.groups.add(editor_group)
         self.experience = Experience.objects.create(
             title="SBF Kastrat Staff - BEM Fasilkom UI",
             description="Contributing to the Kastrat staff team through organizational-related work as SBF staff in Kastrat Fasilkom UI.",
@@ -172,7 +178,35 @@ class MainTest(TestCase):
     def test_experience_page_has_management_controls(self):
         response = self.client.get(reverse("main:show_experience"))
 
+        self.assertNotContains(response, reverse("main:create_experience"))
+        self.assertNotContains(
+            response,
+            reverse("main:update_experience", args=[self.experience.pk]),
+        )
+        self.assertNotContains(
+            response,
+            reverse("main:delete_experience", args=[self.experience.pk]),
+        )
+
+        self.client.force_login(self.editor)
+        response = self.client.get(reverse("main:show_experience"))
+        self.assertNotContains(response, reverse("main:create_experience"))
+        self.assertContains(
+            response,
+            reverse("main:update_experience", args=[self.experience.pk]),
+        )
+        self.assertNotContains(
+            response,
+            reverse("main:delete_experience", args=[self.experience.pk]),
+        )
+
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("main:show_experience"))
         self.assertContains(response, reverse("main:create_experience"))
+        self.assertContains(
+            response,
+            reverse("main:update_experience", args=[self.experience.pk]),
+        )
         self.assertContains(
             response,
             reverse("main:update_experience", args=[self.experience.pk]),
@@ -183,6 +217,7 @@ class MainTest(TestCase):
         )
 
     def test_experience_create_form_page(self):
+        self.client.force_login(self.owner)
         response = self.client.get(reverse("main:create_experience"))
 
         self.assertEqual(response.status_code, 200)
@@ -190,6 +225,7 @@ class MainTest(TestCase):
         self.assertContains(response, "Add New Experience")
 
     def test_experience_update_form_page(self):
+        self.client.force_login(self.editor)
         response = self.client.get(
             reverse("main:update_experience", args=[self.experience.pk])
         )
@@ -200,6 +236,7 @@ class MainTest(TestCase):
         self.assertContains(response, self.experience.title)
 
     def test_create_experience(self):
+        self.client.force_login(self.owner)
         response = self.client.post(
             reverse("main:create_experience"),
             {
@@ -230,6 +267,7 @@ class MainTest(TestCase):
         self.assertFalse(Experience.objects.filter(title="").exists())
 
     def test_update_experience(self):
+        self.client.force_login(self.editor)
         response = self.client.post(
             reverse("main:update_experience", args=[self.experience.pk]),
             {
@@ -247,6 +285,7 @@ class MainTest(TestCase):
         self.assertEqual(self.experience.category, "volunteer")
 
     def test_delete_experience(self):
+        self.client.force_login(self.owner)
         response = self.client.post(
             reverse("main:delete_experience", args=[self.experience.pk])
         )
@@ -255,11 +294,55 @@ class MainTest(TestCase):
         self.assertFalse(Experience.objects.filter(pk=self.experience.pk).exists())
 
     def test_delete_experience_requires_post(self):
+        self.client.force_login(self.owner)
         response = self.client.get(
             reverse("main:delete_experience", args=[self.experience.pk])
         )
 
         self.assertEqual(response.status_code, 405)
+
+    def test_experience_mutations_follow_role_matrix(self):
+        create_url = reverse("main:create_experience")
+        update_url = reverse("main:update_experience", args=[self.experience.pk])
+        delete_url = reverse("main:delete_experience", args=[self.experience.pk])
+        create_data = {
+            "title": "New Experience",
+            "description": "Created by owner.",
+            "category": "research",
+            "thumbnail": "",
+            "ended_at": "",
+        }
+        update_data = {
+            **create_data,
+            "title": "Updated Experience",
+        }
+
+        for url, data in ((create_url, create_data), (update_url, update_data), (delete_url, {})):
+            response = self.client.post(url, data)
+            self.assertRedirects(response, f"{reverse('main:login')}?next={url}")
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(create_url, create_data).status_code, 403)
+        self.assertEqual(self.client.post(update_url, update_data).status_code, 403)
+        self.assertEqual(self.client.post(delete_url).status_code, 403)
+
+        self.client.force_login(self.editor)
+        self.assertEqual(self.client.post(create_url, create_data).status_code, 403)
+        self.assertRedirects(
+            self.client.post(update_url, update_data),
+            reverse("main:show_experience"),
+        )
+        self.assertEqual(self.client.post(delete_url).status_code, 403)
+
+        self.client.force_login(self.owner)
+        self.assertRedirects(
+            self.client.post(create_url, create_data),
+            reverse("main:show_experience"),
+        )
+        self.assertRedirects(
+            self.client.post(delete_url),
+            reverse("main:show_experience"),
+        )
 
     def test_completed_experience(self):
         self.experience.ended_at = timezone.now()
@@ -280,6 +363,7 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "projects.html")
 
     def test_update_project_form_page(self):
+        self.client.force_login(self.editor)
         response = self.client.get(
             reverse("main:update_project", args=[self.finished_project.pk])
         )
@@ -292,6 +376,12 @@ class MainTest(TestCase):
     def test_projects_page_has_edit_controls(self):
         response = self.client.get(reverse("main:show_projects"))
 
+        self.assertNotContains(
+            response,
+            reverse("main:update_project", args=[self.finished_project.pk]),
+        )
+        self.client.force_login(self.editor)
+        response = self.client.get(reverse("main:show_projects"))
         self.assertContains(
             response,
             reverse("main:update_project", args=[self.finished_project.pk]),
@@ -307,6 +397,7 @@ class MainTest(TestCase):
         self.assertNotContains(response, "Edit Project")
 
     def test_project_update_form_uses_edit_mode(self):
+        self.client.force_login(self.editor)
         response = self.client.get(
             reverse("main:update_project", args=[self.finished_project.pk])
         )
@@ -318,6 +409,7 @@ class MainTest(TestCase):
         )
 
     def test_update_project(self):
+        self.client.force_login(self.editor)
         response = self.client.post(
             reverse("main:update_project", args=[self.finished_project.pk]),
             {
@@ -335,6 +427,7 @@ class MainTest(TestCase):
         self.assertEqual(self.finished_project.status, "ongoing")
 
     def test_update_project_requires_valid_data(self):
+        self.client.force_login(self.editor)
         response = self.client.post(
             reverse("main:update_project", args=[self.finished_project.pk]),
             {
@@ -351,6 +444,7 @@ class MainTest(TestCase):
         self.assertEqual(self.finished_project.title, "Infographic @Kastratpacil")
 
     def test_update_nonexistent_project_returns_404(self):
+        self.client.force_login(self.editor)
         response = self.client.get(reverse("main:update_project", args=[999999]))
 
         self.assertEqual(response.status_code, 404)
@@ -380,6 +474,22 @@ class MainTest(TestCase):
         self.client.force_login(self.member)
         response = self.client.get(reverse("main:show_projects"))
         self.assertNotContains(response, reverse("main:create_project"))
+        self.assertNotContains(
+            response,
+            reverse("main:update_project", args=[self.finished_project.pk]),
+        )
+        self.assertNotContains(
+            response,
+            reverse("main:delete_project", args=[self.finished_project.pk]),
+        )
+
+        self.client.force_login(self.editor)
+        response = self.client.get(reverse("main:show_projects"))
+        self.assertNotContains(response, reverse("main:create_project"))
+        self.assertContains(
+            response,
+            reverse("main:update_project", args=[self.finished_project.pk]),
+        )
         self.assertNotContains(
             response,
             reverse("main:delete_project", args=[self.finished_project.pk]),
@@ -413,6 +523,20 @@ class MainTest(TestCase):
         )
         self.assertFalse(Project.objects.filter(title="Unauthorized project").exists())
 
+        self.client.force_login(self.editor)
+        self.assertEqual(self.client.get(create_url).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                create_url,
+                {
+                    "title": "Editor project",
+                    "description": "Editors cannot create projects.",
+                    "status": "finished",
+                },
+            ).status_code,
+            403,
+        )
+
     def test_superuser_can_create_project(self):
         self.client.force_login(self.owner)
         response = self.client.post(
@@ -435,6 +559,10 @@ class MainTest(TestCase):
         self.assertRedirects(response, f"{reverse('main:login')}?next={delete_url}")
 
         self.client.force_login(self.member)
+        self.assertEqual(self.client.post(delete_url).status_code, 403)
+        self.assertTrue(Project.objects.filter(pk=self.finished_project.pk).exists())
+
+        self.client.force_login(self.editor)
         self.assertEqual(self.client.post(delete_url).status_code, 403)
         self.assertTrue(Project.objects.filter(pk=self.finished_project.pk).exists())
 
@@ -497,3 +625,32 @@ class MainTest(TestCase):
         response = self.client.get(reverse("main:show_projects"))
 
         self.assertContains(response, "No projects have been added yet.")
+
+    def test_project_update_permissions_follow_role_matrix(self):
+        update_url = reverse("main:update_project", args=[self.finished_project.pk])
+        update_data = {
+            "title": "Updated Project",
+            "description": "Updated by an authorized account.",
+            "status": "ongoing",
+            "image_path": "",
+            "external_url": "",
+        }
+
+        response = self.client.post(update_url, update_data)
+        self.assertRedirects(response, f"{reverse('main:login')}?next={update_url}")
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(update_url, update_data).status_code, 403)
+
+        self.client.force_login(self.editor)
+        self.assertRedirects(
+            self.client.post(update_url, update_data),
+            reverse("main:show_projects"),
+        )
+
+        self.client.force_login(self.owner)
+        update_data["title"] = "Owner Updated Project"
+        self.assertRedirects(
+            self.client.post(update_url, update_data),
+            reverse("main:show_projects"),
+        )
