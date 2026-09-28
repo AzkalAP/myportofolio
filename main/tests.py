@@ -592,7 +592,7 @@ class MainTest(TestCase):
         self.assertEqual(self.client.get(toggle_url).status_code, 405)
         self.assertFalse(self.finished_project.starred_by.exists())
 
-    def test_projects_json_serializes_starred_user_by_natural_key(self):
+    def test_projects_json_omits_starred_user_identities(self):
         self.finished_project.starred_by.add(self.member)
 
         response = self.client.get(reverse("main:get_projects_json"))
@@ -603,7 +603,41 @@ class MainTest(TestCase):
             if item["pk"] == self.finished_project.pk
         )
 
-        self.assertEqual(serialized_project["fields"]["starred_by"], [["member"]])
+        self.assertEqual(
+            serialized_project["fields"]["title"],
+            self.finished_project.title,
+        )
+        self.assertNotIn("starred_by", serialized_project["fields"])
+        self.assertNotContains(response, "member")
+
+    def test_editor_and_owner_can_toggle_project_stars(self):
+        toggle_url = reverse("main:toggle_star", args=[self.finished_project.pk])
+
+        for user in (self.editor, self.owner):
+            self.client.force_login(user)
+            response = self.client.post(toggle_url)
+
+            self.assertRedirects(response, reverse("main:show_projects"))
+            self.assertTrue(
+                self.finished_project.starred_by.filter(pk=user.pk).exists()
+            )
+
+            self.client.post(toggle_url)
+            self.assertFalse(
+                self.finished_project.starred_by.filter(pk=user.pk).exists()
+            )
+
+    def test_project_page_shows_star_count_and_current_user_state(self):
+        self.finished_project.starred_by.add(self.member)
+
+        anonymous_response = self.client.get(reverse("main:show_projects"))
+        self.assertContains(anonymous_response, "Star")
+        self.assertContains(anonymous_response, 'class="star-count">1</span>')
+
+        self.client.force_login(self.member)
+        starred_response = self.client.get(reverse("main:show_projects"))
+        self.assertContains(starred_response, "Unstar")
+        self.assertContains(starred_response, 'class="star-count">1</span>')
 
     def test_finished_project_has_image_and_external_link(self):
         response = self.client.get(reverse("main:show_projects"))

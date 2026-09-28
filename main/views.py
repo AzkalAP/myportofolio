@@ -237,7 +237,7 @@ def get_projects_json(request):
     projects_json = serializers.serialize(
         "json",
         projects,
-        use_natural_foreign_keys=True,
+        fields=("title", "description", "status", "image_path", "external_url"),
     )
     return HttpResponse(projects_json, content_type="application/json")
 
