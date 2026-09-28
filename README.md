@@ -14,6 +14,8 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 - Django
 - Django MVT architecture
 - Django ORM
+- Django built-in authentication, sessions, and groups
+- Django CSRF protection
 - Semantic HTML5
 - CSS3
 - SQLite for local development
@@ -42,25 +44,45 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 	python manage.py migrate
 	```
 
-5. Run the Django system check:
+5. Create the portfolio-owner account:
+
+	```powershell
+	python manage.py createsuperuser
+	```
+
+	The owner account can create, update, and delete Experience and Project records.
+	To grant update-only access, sign in to `/admin/`, create a group named `Editor`
+	under **Groups**, and add the intended users to it. Assign Editor membership only
+	through Django Admin. Editors can update records but cannot create or delete them.
+
+	The role permissions are:
+
+	| Role | Read | Star projects | Create/delete | Update |
+	| --- | --- | --- | --- | --- |
+	| Visitor | Yes | No | No | No |
+	| Regular user | Yes | Yes | No | No |
+	| Editor | Yes | Yes | No | Yes |
+	| Portfolio owner (superuser) | Yes | Yes | Yes | Yes |
+
+6. Run the Django system check:
 
 	```powershell
 	python manage.py check
 	```
 
-6. Run the tests:
+7. Run the tests:
 
 	```powershell
 	python manage.py test main
 	```
 
-7. Start the development server:
+8. Start the development server:
 
 	```powershell
 	python manage.py runserver
 	```
 
-8. Open `http://127.0.0.1:8000/` in a browser.
+9. Open `http://127.0.0.1:8000/` in a browser.
 
 ## Project Structure
 
@@ -73,7 +95,9 @@ templates/experience.html  Experience listing and management controls
 templates/experience_form.html  Experience add/edit form
 templates/projects.html    Project listing and management controls
 templates/projects_form.html  Project add/edit form
-templates/components/      Reusable delete confirmation components
+templates/register.html    Account registration form
+templates/login.html       Account login form
+templates/components/      Star and delete confirmation components
 static/css/style.css       Portfolio styles
 static/img/                Profile and project images
 requirements.txt           Python dependencies
@@ -91,14 +115,20 @@ main/tests.py              Experience and Project tests
 - `/experience/` - Database-backed experience page
 - `/experience/add/` - Add an experience record
 - `/experience/<uuid>/edit/` - Edit an experience record
+- `/experience/<uuid>/delete/` - Delete an experience record (owner only, POST)
 - `/projects/` - Database-backed projects page
-- `/projects/add/` - Add a project record
-- `/projects/<id>/edit/` - Edit a project record
+- `/projects/add/` - Add a project record (owner only)
+- `/projects/<id>/edit/` - Edit a project record (Editor or owner)
+- `/projects/<id>/delete/` - Delete a project record (owner only, POST)
+- `/projects/<id>/star/` - Toggle the current user's project star (login required, POST)
+- `/register/`, `/login/`, `/logout/` - Account registration, login, and logout
+- `/admin/` - Django Admin for users and Editor group membership
 
 ## JSON Endpoints
 
-- `/api/experience/` - Serialized Experience records
-- `/api/projects/` - Serialized Project records, with optional `?title=` filtering
+- `/api/experience/` - Public serialized Experience records
+- `/api/projects/` - Public Project records, with optional `?title=` filtering. The
+	response includes project fields but omits `starred_by` and user identities.
 
 ## Testing
 
@@ -115,6 +145,11 @@ The tests cover:
 - Experience and Project form validation.
 - Creating, editing, and deleting Experience records.
 - Creating and editing Project records.
+- Registration, login/logout, and last-login cookie lifecycle.
+- Visitor, regular-user, Editor, and owner access rules for Experience and Project mutations.
+- Role-based visibility of create, update, and delete controls.
+- Project star toggling, star counts, and per-user star state.
+- Public project JSON field privacy.
 - Experience and Project JSON endpoints.
 - Project search and filtering.
 - Status display, images, external links, and empty states.
@@ -145,6 +180,14 @@ The tests cover:
 - Added reusable delete confirmation components for Experience and Project records.
 - Added tests for forms, CRUD operations, JSON responses, routes, and template controls.
 - Updated the README with the current project structure, routes, endpoints, and test coverage.
+
+### Week 4
+- Added account registration, login, and logout using Django's built-in authentication system.
+- Displayed authentication status in the shared navigation and added a `last_login` cookie.
+- Added owner-only create/delete and Editor-or-owner update permissions for Experience and Projects.
+- Added project star/unstar controls for authenticated users.
+- Kept portfolio JSON endpoints public while excluding project star-user identities from the Projects response.
+- Added tests for authentication, role permissions, template controls, project stars, and JSON privacy.
 
 ### Assignment 1
 1. So why I used `<section>`, `<header>`, `<main>` and many others so that we can differentiate each components according to its semantic meaning, making it more readable for me. Also, in modern website we need to think about accessibility and semantic tags allow screen readers to read each components' meaning. 
