@@ -13,18 +13,18 @@
                 <div class="project-header">
                     <h1>Projects</h1>
                     {% if user.is_superuser %}
-                        <a href="{% url 'main:create_project' %}"
-                           class="button project-add-button">
+                        <button type="button"
+                                class="button project-add-button"
+                                popovertarget="add-project-modal">
                             <span aria-hidden="true">+</span>
                             Add Project
-                        </a>
+                        </button>
                     {% endif %}
                 </div>
 
-                <form method="get"
-                      action="{% url 'main:show_projects' %}"
-                      class="project-search">
+                <form id="project-search-form" class="project-search">
                     <input type="search"
+                           id="search-input"
                            name="title"
                            value="{{ title_query }}"
                            placeholder="Search by project name"
@@ -33,62 +33,33 @@
                     <button type="submit" class="button">Search</button>
                 </form>
 
-                <div class="experience-grid project-grid">
-                    {% for project in project_list %}
-                        <article class="experience-card">
-                            {% if project.image_path %}
-                                <img src="/static/{{ project.image_path }}"
-                                     alt="Image of {{ project.title }}"
-                                     class="project-image">
-                            {% endif %}
-
-                            <h2>{{ project.title }}</h2>
-                            <span class="experience-category">
-                                {{ project.get_status_display }}
-                            </span>
-
-                            <p class="experience-description">
-                                {{ project.description }}
-                            </p>
-
-                            <div class="project-card-actions">
-                                {% include "components/project_star.html" with project=project %}
-                                <div class="project-actions">
-                                    {% if project.external_url %}
-                                        <a href="{{ project.external_url }}"
-                                           class="button"
-                                           target="_blank"
-                                           rel="noopener noreferrer">
-                                            View Project
-                                        </a>
-                                    {% endif %}
-
-                                        {% if user.is_superuser or is_editor %}
-                                            <a href="{% url 'main:update_project' project.id %}"
-                                               class="button">
-                                                Edit Project
-                                            </a>
-                                        {% endif %}
-
-                                    {% if user.is_superuser %}
-                                        {% include "components/project_delete_modal.html" with project=project %}
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </article>
-                    {% empty %}
-                        {% if title_query %}
-                            <p class="empty-state">
-                                No projects found with that name.
-                            </p>
-                        {% else %}
-                            <p class="empty-state">
-                                No projects have been added yet.
-                            </p>
-                        {% endif %}
-                    {% endfor %}
+                <div id="loading" class="empty-state hide" role="status">
+                    <p>Loading projects...</p>
                 </div>
+                <div id="error" class="empty-state hide" role="alert">
+                    <p>Failed to load project data. Please try again.</p>
+                </div>
+                <div id="empty" class="empty-state hide">
+                    <p>No projects have been added or found yet.</p>
+                </div>
+                <div id="grid" class="experience-grid project-grid hide"></div>
             </div>
         </section>
     </main>
+
+    {% if user.is_superuser %}
+        {% include "components/project_form_modal.html" %}
+    {% endif %}
+
+    <form id="csrf-token-form" class="hide">{% csrf_token %}</form>
+    <div id="project-config"
+         data-projects-endpoint="{% url 'main:get_projects_json' %}"
+         data-create-endpoint="{% url 'main:create_project_ajax' %}"
+         data-star-url-template="{% url 'main:toggle_star' 0 %}"
+         data-update-url-template="{% url 'main:update_project' 0 %}"
+         data-delete-url-template="{% url 'main:delete_project' 0 %}"
+         data-is-owner="{{ user.is_superuser|yesno:'true,false' }}"
+         data-is-editor="{{ is_editor|yesno:'true,false' }}"></div>
+    {% load static %}
+    <script src="{% static 'js/projects.js' %}" defer></script>
 {% endblock content %}

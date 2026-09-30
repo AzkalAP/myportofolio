@@ -4,7 +4,7 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core import serializers
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -147,21 +147,13 @@ def delete_experience(request, experience_id):
     return redirect("main:show_experience")
 
 def show_projects(request):
-    json_response = get_projects_json(request)
-
-    projects = serializers.deserialize(
-        "json",
-        json_response.content.decode("utf-8"),
-    )
-    projects = [project.object for project in projects]
-
     title_query = request.GET.get("title", "").strip()
 
     context = {
         "name": "Azkal Azkiya Arifi Putra",
-        "project_list": projects,
         "title_query": title_query,
         "is_editor": _is_editor(request.user),
+        "form": ProjectForm() if request.user.is_superuser else None,
     }
 
     return render(request, "projects.html", context)
@@ -183,6 +175,25 @@ def create_project(request):
         "form": form,
     }
     return render(request, "projects_form.html", context)
+
+
+@require_POST
+def create_project_ajax(request):
+    if not request.user.is_superuser:
+        return JsonResponse(
+            {"message": "Only the portfolio owner can add projects."},
+            status=403,
+        )
+
+    form = ProjectForm(request.POST)
+    if form.is_valid():
+        project = form.save()
+        return JsonResponse(
+            {"message": "Project added successfully.", "pk": project.pk},
+            status=201,
+        )
+
+    return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
 
 
 @login_required(login_url="main:login")
@@ -229,17 +240,33 @@ def toggle_star(request, project_id):
 
 def get_projects_json(request):
     title_query = request.GET.get("title", "").strip()
-    projects = Project.objects.all()
+    projects = Project.objects.prefetch_related("starred_by").all()
 
     if title_query:
         projects = projects.filter(title__icontains=title_query)
 
-    projects_json = serializers.serialize(
-        "json",
-        projects,
-        fields=("title", "description", "status", "image_path", "external_url"),
-    )
-    return HttpResponse(projects_json, content_type="application/json")
+    data = []
+    for project in projects:
+        starred_users = project.starred_by.all()
+        data.append(
+            {
+                "pk": project.pk,
+                "fields": {
+                    "title": project.title,
+                    "description": project.description,
+                    "status": project.status,
+                    "image_path": project.image_path,
+                    "external_url": project.external_url,
+                    "star_count": starred_users.count(),
+                    "is_starred": (
+                        request.user in starred_users
+                        if request.user.is_authenticated
+                        else False
+                    ),
+                },
+            }
+        )
+    return JsonResponse(data, safe=False)
 
 
 def get_experience_json(request):
