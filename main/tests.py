@@ -143,6 +143,14 @@ class MainTest(TestCase):
         self.assertEqual(self.experience.category, "organization")
         self.assertTrue(self.experience.is_ongoing)
 
+    def test_experience_can_be_starred_by_users(self):
+        self.experience.starred_by.add(self.member)
+
+        self.assertEqual(self.experience.starred_by.count(), 1)
+        self.assertTrue(
+            self.member.starred_experiences.filter(pk=self.experience.pk).exists()
+        )
+
     def test_experience_page(self):
         response = self.client.get(reverse("main:show_experience"))
 
@@ -265,6 +273,38 @@ class MainTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("title", form.errors)
         self.assertFalse(Experience.objects.filter(title="").exists())
+
+    def test_experience_form_strips_html_from_text_fields(self):
+        form = ExperienceForm(
+            {
+                "title": "<b>Teaching Assistant</b>",
+                "description": "<p>Helped students learn programming.</p>",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data["title"], "Teaching Assistant")
+        self.assertEqual(
+            form.cleaned_data["description"],
+            "Helped students learn programming.",
+        )
+
+    def test_experience_form_rejects_title_containing_only_html(self):
+        form = ExperienceForm(
+            {
+                "title": "<script></script>",
+                "description": "A description.",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("title", form.errors)
 
     def test_update_experience(self):
         self.client.force_login(self.editor)
