@@ -85,7 +85,8 @@ def logout_user(request):
 def show_experience(request):
     context = {
         "name": "Azkal Azkiya Arifi Putra",
-        "experience_list": Experience.objects.all(),
+        "is_owner": request.user.is_superuser,
+        "is_authenticated": request.user.is_authenticated,
         "is_editor": _is_editor(request.user),
     }
     return render(request, "experience.html", context)

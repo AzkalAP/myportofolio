@@ -156,11 +156,12 @@ class MainTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "experience.html")
-        self.assertContains(response, self.experience.title)
-        self.assertContains(response, self.experience.description)
-        
-        self.assertContains(response, "Organization")
-        self.assertContains(response, "Ongoing")
+        self.assertNotContains(response, self.experience.title)
+        self.assertContains(response, "Loading experiences...")
+        self.assertContains(response, "Failed to load experience data")
+        self.assertContains(response, "No experience has been added yet.")
+        self.assertContains(response, reverse("main:get_experience_json"))
+        self.assertContains(response, "js/experience.js")
         self.assertContains(response, f'href="{reverse("main:show_main")}"')
 
     def test_empty_experience_page(self):
@@ -310,50 +311,29 @@ class MainTest(TestCase):
     def test_experience_page_uses_json_data(self):
         response = self.client.get(reverse("main:show_experience"))
 
-        experience_ids = [experience.pk for experience in response.context["experience_list"]]
-        self.assertIn(self.experience.pk, experience_ids)
-        self.assertContains(response, self.experience.title)
+        self.assertNotContains(response, self.experience.title)
+        self.assertContains(response, reverse("main:get_experience_json"))
+        json_response = self.client.get(reverse("main:get_experience_json"))
+        experience_ids = [item["pk"] for item in json_response.json()]
+        self.assertIn(str(self.experience.pk), experience_ids)
 
     def test_experience_page_has_management_controls(self):
         response = self.client.get(reverse("main:show_experience"))
 
+        self.assertContains(response, 'data-is-owner="false"')
+        self.assertContains(response, 'data-is-editor="false"')
         self.assertNotContains(response, reverse("main:create_experience"))
-        self.assertNotContains(
-            response,
-            reverse("main:update_experience", args=[self.experience.pk]),
-        )
-        self.assertNotContains(
-            response,
-            reverse("main:delete_experience", args=[self.experience.pk]),
-        )
 
         self.client.force_login(self.editor)
         response = self.client.get(reverse("main:show_experience"))
+        self.assertContains(response, 'data-is-editor="true"')
+        self.assertContains(response, 'data-is-owner="false"')
         self.assertNotContains(response, reverse("main:create_experience"))
-        self.assertContains(
-            response,
-            reverse("main:update_experience", args=[self.experience.pk]),
-        )
-        self.assertNotContains(
-            response,
-            reverse("main:delete_experience", args=[self.experience.pk]),
-        )
 
         self.client.force_login(self.owner)
         response = self.client.get(reverse("main:show_experience"))
+        self.assertContains(response, 'data-is-owner="true"')
         self.assertContains(response, reverse("main:create_experience"))
-        self.assertContains(
-            response,
-            reverse("main:update_experience", args=[self.experience.pk]),
-        )
-        self.assertContains(
-            response,
-            reverse("main:update_experience", args=[self.experience.pk]),
-        )
-        self.assertContains(
-            response,
-            reverse("main:delete_experience", args=[self.experience.pk]),
-        )
 
     def test_experience_create_form_page(self):
         self.client.force_login(self.owner)
