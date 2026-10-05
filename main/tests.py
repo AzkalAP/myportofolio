@@ -322,26 +322,28 @@ class MainTest(TestCase):
 
         self.assertContains(response, 'data-is-owner="false"')
         self.assertContains(response, 'data-is-editor="false"')
-        self.assertNotContains(response, reverse("main:create_experience"))
+        self.assertNotContains(response, "Add Experience")
+        self.assertNotContains(response, "add-experience-modal")
 
         self.client.force_login(self.editor)
         response = self.client.get(reverse("main:show_experience"))
         self.assertContains(response, 'data-is-editor="true"')
         self.assertContains(response, 'data-is-owner="false"')
-        self.assertNotContains(response, reverse("main:create_experience"))
+        self.assertNotContains(response, "Add Experience")
+        self.assertNotContains(response, "add-experience-modal")
 
         self.client.force_login(self.owner)
         response = self.client.get(reverse("main:show_experience"))
         self.assertContains(response, 'data-is-owner="true"')
-        self.assertContains(response, reverse("main:create_experience"))
-
-    def test_experience_create_form_page(self):
-        self.client.force_login(self.owner)
-        response = self.client.get(reverse("main:create_experience"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "experience_form.html")
-        self.assertContains(response, "Add New Experience")
+        self.assertContains(response, 'popovertarget="add-experience-modal"')
+        self.assertContains(response, reverse("main:create_experience_ajax"))
+        self.assertContains(response, 'id="experience-create-form"')
+        self.assertContains(response, 'name="title"')
+        self.assertContains(response, 'name="category"')
+        self.assertGreater(
+            response.content.count(b'name="csrfmiddlewaretoken"'),
+            1,
+        )
 
     def test_experience_update_form_page(self):
         self.client.force_login(self.editor)
@@ -353,22 +355,6 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "experience_form.html")
         self.assertContains(response, "Edit Experience")
         self.assertContains(response, self.experience.title)
-
-    def test_create_experience(self):
-        self.client.force_login(self.owner)
-        response = self.client.post(
-            reverse("main:create_experience"),
-            {
-                "title": "Teaching Assistant",
-                "description": "Helped students learn programming.",
-                "category": "research",
-                "thumbnail": "",
-                "ended_at": "",
-            },
-        )
-
-        self.assertRedirects(response, reverse("main:show_experience"))
-        self.assertTrue(Experience.objects.filter(title="Teaching Assistant").exists())
 
     def test_create_experience_requires_valid_data(self):
         form = ExperienceForm(
@@ -453,7 +439,7 @@ class MainTest(TestCase):
         self.assertEqual(response.status_code, 405)
 
     def test_experience_mutations_follow_role_matrix(self):
-        create_url = reverse("main:create_experience")
+        create_url = reverse("main:create_experience_ajax")
         update_url = reverse("main:update_experience", args=[self.experience.pk])
         delete_url = reverse("main:delete_experience", args=[self.experience.pk])
         create_data = {
@@ -468,9 +454,11 @@ class MainTest(TestCase):
             "title": "Updated Experience",
         }
 
-        for url, data in ((create_url, create_data), (update_url, update_data), (delete_url, {})):
+        for url, data in ((update_url, update_data), (delete_url, {})):
             response = self.client.post(url, data)
             self.assertRedirects(response, f"{reverse('main:login')}?next={url}")
+
+        self.assertEqual(self.client.post(create_url, create_data).status_code, 403)
 
         self.client.force_login(self.member)
         self.assertEqual(self.client.post(create_url, create_data).status_code, 403)
@@ -486,10 +474,7 @@ class MainTest(TestCase):
         self.assertEqual(self.client.post(delete_url).status_code, 403)
 
         self.client.force_login(self.owner)
-        self.assertRedirects(
-            self.client.post(create_url, create_data),
-            reverse("main:show_experience"),
-        )
+        self.assertEqual(self.client.post(create_url, create_data).status_code, 201)
         self.assertRedirects(
             self.client.post(delete_url),
             reverse("main:show_experience"),

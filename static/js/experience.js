@@ -1,6 +1,8 @@
 const experienceConfig = document.getElementById("experience-config").dataset;
 const experienceSearchForm = document.getElementById("experience-search-form");
 const experienceSearchInput = document.getElementById("experience-search-input");
+const experienceCreateForm = document.getElementById("experience-create-form");
+const experienceAddModal = document.getElementById("add-experience-modal");
 const experienceLoading = document.getElementById("experience-loading");
 const experienceError = document.getElementById("experience-error");
 const experienceEmpty = document.getElementById("experience-empty");
@@ -305,5 +307,60 @@ experienceGrid.addEventListener("click", async (event) => {
     starButton.disabled = false;
   }
 });
+
+if (experienceCreateForm) {
+  experienceCreateForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitButton = experienceCreateForm.querySelector(
+      'button[type="submit"]'
+    );
+    submitButton.disabled = true;
+    const formData = new FormData(experienceCreateForm);
+    const formCsrfToken = formData.get("csrfmiddlewaretoken") || experienceCsrfToken;
+
+    try {
+      const response = await fetch(experienceConfig.createEndpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "X-CSRFToken": String(formCsrfToken),
+        },
+        body: formData,
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const fieldErrors = result.errors
+          ? Object.values(result.errors)
+              .flatMap((errors) => errors)
+              .map((error) => error.message || String(error))
+          : [];
+        const message =
+          fieldErrors.join(" ") ||
+          result.message ||
+          `Something went wrong (status ${response.status}).`;
+        showToast("Failed to add experience", message, "error");
+        return;
+      }
+
+      experienceCreateForm.reset();
+      experienceAddModal.hidePopover();
+      showToast(
+        "Success",
+        result.message || "Experience added successfully.",
+        "success"
+      );
+      fetchExperiences(experienceSearchInput.value.trim());
+    } catch (error) {
+      showToast(
+        "Failed to add experience",
+        "Could not reach the server. Please try again.",
+        "error"
+      );
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+}
 
 fetchExperiences();

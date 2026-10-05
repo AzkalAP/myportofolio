@@ -1,7 +1,6 @@
 from django.urls import path
 
 from main.views import (
-    create_experience,
     create_experience_ajax,
     create_project,
     create_project_ajax,
@@ -29,7 +28,6 @@ urlpatterns = [
     path("login/", login_user, name="login"),
     path("logout/", logout_user, name="logout"),
     path("experience/", show_experience, name="show_experience"),
-    path("experience/add/", create_experience, name="create_experience"),
     path("experience/add-ajax/", create_experience_ajax, name="create_experience_ajax"),
     path("experience/<uuid:experience_id>/star/", toggle_experience_star, name="toggle_experience_star"),
     path("experience/<uuid:experience_id>/edit/", update_experience, name="update_experience"),

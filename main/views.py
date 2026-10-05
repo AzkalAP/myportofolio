@@ -88,26 +88,9 @@ def show_experience(request):
         "is_owner": request.user.is_superuser,
         "is_authenticated": request.user.is_authenticated,
         "is_editor": _is_editor(request.user),
+        "experience_form": ExperienceForm() if request.user.is_superuser else None,
     }
     return render(request, "experience.html", context)
-
-
-@login_required(login_url="main:login")
-def create_experience(request):
-    _require_owner(request.user)
-    form = ExperienceForm(request.POST or None)
-
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Experience baru berhasil ditambahkan!")
-        return redirect("main:show_experience")
-
-    context = {
-        "name": "Azkal Azkiya Arifi Putra",
-        "form": form,
-        "is_edit": False,
-    }
-    return render(request, "experience_form.html", context)
 
 
 @require_POST

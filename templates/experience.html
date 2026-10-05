@@ -14,11 +14,12 @@
                 <div class="project-header">
                     <h1>Experience</h1>
                     {% if is_owner %}
-                        <a href="{% url 'main:create_experience' %}"
-                           class="button project-add-button">
+                        <button type="button"
+                                class="button project-add-button"
+                                popovertarget="add-experience-modal">
                             <span aria-hidden="true">+</span>
                             Add Experience
-                        </a>
+                        </button>
                     {% endif %}
                 </div>
 
@@ -47,9 +48,14 @@
         </section>
     </main>
 
+    {% if is_owner %}
+        {% include "components/experience_form_modal.html" %}
+    {% endif %}
+
     <form id="experience-csrf-form" class="hide">{% csrf_token %}</form>
     <div id="experience-config"
          data-experiences-endpoint="{% url 'main:get_experience_json' %}"
+         data-create-endpoint="{% url 'main:create_experience_ajax' %}"
          data-star-url-template="{% url 'main:toggle_experience_star' '00000000-0000-0000-0000-000000000000' %}"
          data-update-url-template="{% url 'main:update_experience' '00000000-0000-0000-0000-000000000000' %}"
          data-delete-url-template="{% url 'main:delete_experience' '00000000-0000-0000-0000-000000000000' %}"
