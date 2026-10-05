@@ -16,6 +16,7 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 - Django ORM
 - Django built-in authentication, sessions, and groups
 - Django CSRF protection
+- Fetch API for AJAX requests
 - Semantic HTML5
 - CSS3
 - SQLite for local development
@@ -57,7 +58,7 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 
 	The role permissions are:
 
-	| Role | Read | Star projects | Create/delete | Update |
+	| Role | Read | Star Experience and Projects | Create/delete | Update |
 	| --- | --- | --- | --- | --- |
 	| Visitor | Yes | No | No | No |
 	| Regular user | Yes | Yes | No | No |
@@ -92,13 +93,17 @@ portofolio/                Django project configuration
 templates/index.html       Portfolio page markup
 templates/base.html        Shared HTML layout and navigation
 templates/experience.html  Experience listing and management controls
-templates/experience_form.html  Experience add/edit form
+templates/experience_form.html  Experience edit form
+templates/components/experience_form_modal.html  Experience AJAX add form
 templates/projects.html    Project listing and management controls
 templates/projects_form.html  Project add/edit form
 templates/register.html    Account registration form
 templates/login.html       Account login form
 templates/components/      Star and delete confirmation components
 static/css/style.css       Portfolio styles
+static/js/experience.js    Experience AJAX, search, stars, and form submission
+static/js/projects.js      Project AJAX, search, stars, and form submission
+static/js/toast.js         Toast notifications
 static/img/                Profile and project images
 requirements.txt           Python dependencies
 main/models.py             Experience and Project database models
@@ -106,16 +111,18 @@ main/forms.py              Experience and Project forms
 main/views.py              View logic and JSON endpoints
 main/urls.py               Application URL routes
 main/migrations/           Database migration files
+main/migrations/0007_experience_starred_by.py  Experience star relation
 main/tests.py              Experience and Project tests
 ```
 
 ## Pages
 
 - `/` - Main portfolio page
-- `/experience/` - Database-backed experience page
-- `/experience/add/` - Add an experience record
+- `/experience/` - Experience page; records load through AJAX
 - `/experience/<uuid>/edit/` - Edit an experience record
 - `/experience/<uuid>/delete/` - Delete an experience record (owner only, POST)
+- `/experience/<uuid>/star/` - Toggle an Experience star (login required, POST)
+- `/experience/add-ajax/` - Add an Experience (owner only, POST)
 - `/projects/` - Database-backed projects page
 - `/projects/add/` - Add a project record (owner only)
 - `/projects/<id>/edit/` - Edit a project record (Editor or owner)
@@ -126,7 +133,7 @@ main/tests.py              Experience and Project tests
 
 ## JSON Endpoints
 
-- `/api/experience/` - Public serialized Experience records
+- `/api/experience/` - Public Experience JSON with star count and the current user's star state; supports `?title=` filtering
 - `/api/projects/` - Public Project records, with optional `?title=` filtering. The
 	response includes project fields but omits `starred_by` and user identities.
 
@@ -148,6 +155,11 @@ The tests cover:
 - Registration, login/logout, and last-login cookie lifecycle.
 - Visitor, regular-user, Editor, and owner access rules for Experience and Project mutations.
 - Role-based visibility of create, update, and delete controls.
+- Experience AJAX creation responses, CSRF enforcement, and owner-only permissions.
+- Experience star toggles, star counts, and per-user star state.
+- Experience text sanitization and rejection of markup-only titles.
+- Experience loading, empty, and error states, plus the AJAX page skeleton.
+- Experience JSON title filtering.
 - Project star toggling, star counts, and per-user star state.
 - Public project JSON field privacy.
 - Experience and Project JSON endpoints.
@@ -188,6 +200,14 @@ The tests cover:
 - Added project star/unstar controls for authenticated users.
 - Kept portfolio JSON endpoints public while excluding project star-user identities from the Projects response.
 - Added tests for authentication, role permissions, template controls, project stars, and JSON privacy.
+
+### Week 5
+- Added Experience AJAX data loading and debounced title search.
+- Added Experience star counts and per-user star state to the public JSON response.
+- Added an owner-only modal form that creates Experience records through Fetch with CSRF protection.
+- Added success and error toast feedback, including server-side validation messages.
+- Added server-side HTML tag stripping for Experience text and safe client-side DOM rendering.
+- Added loading, empty, and error states while preserving visitor read access and Assignment 4 role permissions.
 
 ### Assignment 1
 1. So why I used `<section>`, `<header>`, `<main>` and many others so that we can differentiate each components according to its semantic meaning, making it more readable for me. Also, in modern website we need to think about accessibility and semantic tags allow screen readers to read each components' meaning. 
