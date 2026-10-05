@@ -2,6 +2,7 @@ from django.urls import path
 
 from main.views import (
     create_experience,
+    create_experience_ajax,
     create_project,
     create_project_ajax,
     delete_experience,
@@ -15,6 +16,7 @@ from main.views import (
     show_main,
     show_projects,
     toggle_star,
+    toggle_experience_star,
     update_project,
     update_experience,
 )
@@ -28,6 +30,8 @@ urlpatterns = [
     path("logout/", logout_user, name="logout"),
     path("experience/", show_experience, name="show_experience"),
     path("experience/add/", create_experience, name="create_experience"),
+    path("experience/add-ajax/", create_experience_ajax, name="create_experience_ajax"),
+    path("experience/<uuid:experience_id>/star/", toggle_experience_star, name="toggle_experience_star"),
     path("experience/<uuid:experience_id>/edit/", update_experience, name="update_experience"),
     path("experience/<uuid:experience_id>/delete/", delete_experience, name="delete_experience"),
     path("api/experience/", get_experience_json, name="get_experience_json"),

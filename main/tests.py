@@ -176,6 +176,137 @@ class MainTest(TestCase):
         self.assertEqual(response.headers["Content-Type"], "application/json")
         self.assertContains(response, self.experience.title)
 
+    def test_experience_json_contains_star_state_without_user_identities(self):
+        self.experience.starred_by.add(self.member)
+
+        anonymous_response = self.client.get(reverse("main:get_experience_json"))
+        anonymous_item = next(
+            item
+            for item in anonymous_response.json()
+            if item["pk"] == str(self.experience.pk)
+        )
+        self.assertEqual(anonymous_item["fields"]["star_count"], 1)
+        self.assertFalse(anonymous_item["fields"]["is_starred"])
+        self.assertNotIn("starred_by", anonymous_item["fields"])
+        self.assertNotContains(anonymous_response, self.member.username)
+
+        self.client.force_login(self.member)
+        member_response = self.client.get(reverse("main:get_experience_json"))
+        member_item = next(
+            item
+            for item in member_response.json()
+            if item["pk"] == str(self.experience.pk)
+        )
+        self.assertEqual(member_item["fields"]["star_count"], 1)
+        self.assertTrue(member_item["fields"]["is_starred"])
+
+    def test_experience_json_filters_by_title(self):
+        response = self.client.get(
+            reverse("main:get_experience_json"),
+            {"title": "Kastrat"},
+        )
+
+        titles = [item["fields"]["title"] for item in response.json()]
+        self.assertTrue(titles)
+        self.assertTrue(all("Kastrat" in title for title in titles))
+
+    def test_ajax_create_experience_returns_created_record(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("main:create_experience_ajax"),
+            {
+                "title": "Teaching Assistant",
+                "description": "Helped students learn programming.",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            Experience.objects.filter(title="Teaching Assistant").exists()
+        )
+
+    def test_ajax_create_experience_returns_validation_errors(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("main:create_experience_ajax"),
+            {
+                "title": "<b></b>",
+                "description": "Missing a usable title.",
+                "category": "research",
+                "thumbnail": "",
+                "ended_at": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("title", response.json()["errors"])
+
+    def test_ajax_create_experience_requires_owner_permission(self):
+        create_url = reverse("main:create_experience_ajax")
+        data = {
+            "title": "Unauthorized experience",
+            "description": "Must not be saved.",
+            "category": "research",
+            "thumbnail": "",
+            "ended_at": "",
+        }
+
+        for user in (None, self.member, self.editor):
+            if user is None:
+                self.client.logout()
+            else:
+                self.client.force_login(user)
+            response = self.client.post(create_url, data)
+            self.assertEqual(response.status_code, 403)
+
+        self.assertFalse(
+            Experience.objects.filter(title="Unauthorized experience").exists()
+        )
+
+    def test_ajax_create_experience_requires_csrf(self):
+        from django.test import Client
+
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.owner)
+        create_url = reverse("main:create_experience_ajax")
+        data = {
+            "title": "CSRF protected experience",
+            "description": "Requires a valid CSRF token.",
+            "category": "research",
+            "thumbnail": "",
+            "ended_at": "",
+        }
+
+        self.assertEqual(csrf_client.post(create_url, data).status_code, 403)
+        login_response = csrf_client.get(reverse("main:login"))
+        csrf_token = str(login_response.context["csrf_token"])
+        response = csrf_client.post(
+            create_url,
+            data,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_ajax_toggle_experience_star(self):
+        toggle_url = reverse(
+            "main:toggle_experience_star",
+            args=[self.experience.pk],
+        )
+        anonymous_response = self.client.post(toggle_url)
+        self.assertEqual(anonymous_response.status_code, 403)
+
+        self.client.force_login(self.member)
+        starred_response = self.client.post(toggle_url)
+        self.assertEqual(starred_response.status_code, 200)
+        self.assertEqual(starred_response.json(), {"star_count": 1, "is_starred": True})
+
+        unstarred_response = self.client.post(toggle_url)
+        self.assertEqual(unstarred_response.status_code, 200)
+        self.assertEqual(unstarred_response.json(), {"star_count": 0, "is_starred": False})
+
     def test_experience_page_uses_json_data(self):
         response = self.client.get(reverse("main:show_experience"))
 

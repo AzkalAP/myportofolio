@@ -3,8 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.core import serializers
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -84,16 +83,9 @@ def logout_user(request):
 
 
 def show_experience(request):
-    json_response = get_experience_json(request)
-    experiences = serializers.deserialize(
-        "json",
-        json_response.content.decode("utf-8"),
-    )
-    experiences = [experience.object for experience in experiences]
-
     context = {
         "name": "Azkal Azkiya Arifi Putra",
-        "experience_list": experiences,
+        "experience_list": Experience.objects.all(),
         "is_editor": _is_editor(request.user),
     }
     return render(request, "experience.html", context)
@@ -115,6 +107,28 @@ def create_experience(request):
         "is_edit": False,
     }
     return render(request, "experience_form.html", context)
+
+
+@require_POST
+def create_experience_ajax(request):
+    if not request.user.is_superuser:
+        return JsonResponse(
+            {"message": "Only the portfolio owner can add experience."},
+            status=403,
+        )
+
+    form = ExperienceForm(request.POST)
+    if form.is_valid():
+        experience = form.save()
+        return JsonResponse(
+            {
+                "message": "Experience added successfully.",
+                "pk": str(experience.pk),
+            },
+            status=201,
+        )
+
+    return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
 
 
 @login_required(login_url="main:login")
@@ -145,6 +159,26 @@ def delete_experience(request, experience_id):
     experience.delete()
     messages.success(request, "Experience berhasil dihapus!")
     return redirect("main:show_experience")
+
+
+@require_POST
+def toggle_experience_star(request, experience_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({"message": "Log in to star experience."}, status=403)
+
+    experience = get_object_or_404(Experience, pk=experience_id)
+    starred = experience.starred_by.filter(pk=request.user.pk).exists()
+    if starred:
+        experience.starred_by.remove(request.user)
+    else:
+        experience.starred_by.add(request.user)
+
+    return JsonResponse(
+        {
+            "star_count": experience.starred_by.count(),
+            "is_starred": not starred,
+        }
+    )
 
 def show_projects(request):
     title_query = request.GET.get("title", "").strip()
@@ -270,6 +304,39 @@ def get_projects_json(request):
 
 
 def get_experience_json(request):
-    experiences = Experience.objects.all()
-    experiences_json = serializers.serialize("json", experiences)
-    return HttpResponse(experiences_json, content_type="application/json")
+    title_query = request.GET.get("title", "").strip()
+    experiences = Experience.objects.prefetch_related("starred_by").all()
+    if title_query:
+        experiences = experiences.filter(title__icontains=title_query)
+
+    user_starred_ids = set()
+    if request.user.is_authenticated:
+        user_starred_ids = set(
+            request.user.starred_experiences.values_list("pk", flat=True)
+        )
+
+    data = []
+    for experience in experiences:
+        starred_users = experience.starred_by.all()
+        data.append(
+            {
+                "pk": str(experience.pk),
+                "fields": {
+                    "title": experience.title,
+                    "description": experience.description,
+                    "category": experience.category,
+                    "category_display": experience.get_category_display(),
+                    "thumbnail": experience.thumbnail or "",
+                    "started_at": experience.started_at.isoformat(),
+                    "ended_at": (
+                        experience.ended_at.isoformat()
+                        if experience.ended_at
+                        else None
+                    ),
+                    "is_ongoing": experience.is_ongoing,
+                    "star_count": starred_users.count(),
+                    "is_starred": experience.pk in user_starred_ids,
+                },
+            }
+        )
+    return JsonResponse(data, safe=False)
