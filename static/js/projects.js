@@ -6,10 +6,8 @@ const gridContainer = document.getElementById("grid");
 const searchForm = document.getElementById("project-search-form");
 const searchInput = document.getElementById("search-input");
 const projectForm = document.getElementById("project-form");
-const csrfToken = document.querySelector(
-  '#csrf-token-form input[name="csrfmiddlewaretoken"]'
-).value;
 const isOwner = projectConfig.isOwner === "true";
+const isAuthenticated = projectConfig.isAuthenticated === "true";
 const canEdit = isOwner || projectConfig.isEditor === "true";
 const searchDebounceDelay = 300;
 let searchDebounceTimer;
@@ -25,6 +23,15 @@ function displayPageSection({
   errorState.classList.toggle("hide", !showError);
   emptyState.classList.toggle("hide", !showEmpty);
   gridContainer.classList.toggle("hide", !showGrid);
+}
+
+function getCookie(name) {
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
 }
 
 function escapeHtml(value) {
@@ -49,9 +56,7 @@ function getSafeExternalUrl(value) {
   }
 }
 
-function buildProjectCardElement(item) {
-  const project = item.fields;
-  const projectId = String(item.pk);
+function buildProjectCardElement(project) {
   const articleElement = document.createElement("article");
   articleElement.className = "experience-card";
 
@@ -62,21 +67,28 @@ function buildProjectCardElement(item) {
   const urlHtml = externalUrl
     ? `<a href="${escapeHtml(externalUrl)}" class="button" target="_blank" rel="noopener noreferrer">View Project</a>`
     : "";
-  const starUrl = getProjectUrl(projectConfig.starUrlTemplate, projectId);
-  const updateUrl = getProjectUrl(projectConfig.updateUrlTemplate, projectId);
-  const deleteUrl = getProjectUrl(projectConfig.deleteUrlTemplate, projectId);
-  const isStarredClass = project.is_starred ? " is-starred" : "";
-  const starText = project.is_starred ? "Unstar" : "Star";
+  const starUrl = getProjectUrl(
+    projectConfig.starUrlTemplate,
+    project.id,
+  );
+  const detailUrl = getProjectUrl(
+    projectConfig.detailUrlTemplate,
+    project.id,
+  );
+  const updateUrl = getProjectUrl(
+    projectConfig.updateUrlTemplate,
+    project.id,
+  );
   const starCount = Number(project.star_count) || 0;
-  const starTitle = starCount > 0
-    ? `Starred by ${starCount} users`
-    : "Be the first to star";
   const statusLabel = project.status === "finished" ? "Finished" : "In progress";
+  const starHtml = isAuthenticated
+    ? `<button type="button" class="button button-star${project.is_starred ? " is-starred" : ""}" data-action="star" data-id="${escapeHtml(project.id)}" title="${escapeHtml(project.starred_by_names)}" aria-label="${project.is_starred ? "Remove your star" : "Star this project"}"><span aria-hidden="true">★</span>${project.is_starred ? "Unstar" : "Star"}<span class="star-count">${starCount}</span></button>`
+    : `<a href="${escapeHtml(projectConfig.loginUrl)}" class="button">Login to star <span class="star-count">${starCount}</span></a>`;
   const editHtml = canEdit
     ? `<a href="${escapeHtml(updateUrl)}" class="button">Edit Project</a>`
     : "";
   const deleteHtml = isOwner
-    ? `<form method="post" action="${escapeHtml(deleteUrl)}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this project?');"><input type="hidden" name="csrfmiddlewaretoken" value="${escapeHtml(csrfToken)}"><button type="submit" class="button button-danger">Delete Project</button></form>`
+    ? `<button type="button" class="button button-danger" data-action="delete" data-id="${escapeHtml(project.id)}">Delete Project</button>`
     : "";
 
   articleElement.innerHTML = `
@@ -87,14 +99,7 @@ function buildProjectCardElement(item) {
     <div class="project-card-actions">
       <div class="project-actions">
         ${urlHtml}
-        <form method="post" action="${escapeHtml(starUrl)}" class="star-form">
-          <input type="hidden" name="csrfmiddlewaretoken" value="${escapeHtml(csrfToken)}">
-          <button type="submit" class="button button-star${isStarredClass}" title="${escapeHtml(starTitle)}" aria-label="${project.is_starred ? "Remove your star" : "Star this project"}">
-            <span aria-hidden="true">★</span>
-            ${starText}
-            <span class="star-count">${starCount}</span>
-          </button>
-        </form>
+        ${starHtml}
         ${editHtml}
         ${deleteHtml}
       </div>
@@ -116,18 +121,14 @@ async function fetchProjects(searchQuery = "") {
       headers: { Accept: "application/json" },
       signal: projectsAbortController.signal,
     });
-    if (!response.ok) throw new Error("Failed to fetch project data");
+    if (!response.ok) throw new Error(`Request failed (HTTP ${response.status}).`);
 
-    const projectData = await response.json();
-    if (projectData.length === 0) {
-      displayPageSection({ showEmpty: true });
-      return;
-    }
-
-    gridContainer.replaceChildren(
-      ...projectData.map(buildProjectCardElement)
-    );
-    displayPageSection({ showGrid: true });
+    const projects = await response.json();
+    gridContainer.replaceChildren(...projects.map(buildProjectCardElement));
+    displayPageSection({
+      showGrid: projects.length > 0,
+      showEmpty: projects.length === 0,
+    });
   } catch (error) {
     if (error.name === "AbortError") return;
     console.error("Error loading projects:", error);
@@ -135,62 +136,98 @@ async function fetchProjects(searchQuery = "") {
   }
 }
 
-function searchProjects() {
-  fetchProjects(searchInput.value.trim());
+function apiErrorMessage(data, status) {
+  const messages = Object.values(data)
+    .flat()
+    .filter((value) => typeof value === "string");
+  return messages.join(" ") || `Request failed (HTTP ${status}).`;
 }
+
+async function writeProject(url, method, payload) {
+  const headers = {
+    Accept: "application/json",
+    "X-CSRFToken": getCookie("csrftoken"),
+  };
+  const options = { method, headers };
+  if (payload !== undefined) {
+    headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload);
+  }
+
+  const response = await fetch(url, options);
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(apiErrorMessage(data, response.status));
+  return data;
+}
+
+async function addProject(event) {
+  event.preventDefault();
+  const button = projectForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+
+  try {
+    const formData = new FormData(projectForm);
+    const payload = Object.fromEntries(
+      ["title", "description", "status", "image_path", "external_url"]
+        .map((name) => [name, formData.get(name)]),
+    );
+    await writeProject(projectConfig.projectsEndpoint, "POST", payload);
+    projectForm.reset();
+    document.getElementById("add-project-modal").hidePopover();
+    showToast("Success", "New project added successfully!", "success");
+    await fetchProjects(searchInput.value.trim());
+  } catch (error) {
+    showToast("Failed to add project", error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+if (projectForm) projectForm.addEventListener("submit", addProject);
+
+gridContainer.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button || button.disabled) return;
+
+  const action = button.dataset.action;
+  if (action === "delete" && !window.confirm("Are you sure you want to delete this project?")) {
+    return;
+  }
+
+  button.disabled = true;
+  const url = action === "star"
+    ? getProjectUrl(projectConfig.starUrlTemplate, button.dataset.id)
+    : getProjectUrl(projectConfig.detailUrlTemplate, button.dataset.id);
+  const method = action === "star" ? "POST" : "DELETE";
+
+  try {
+    await writeProject(url, method);
+    showToast(
+      "Success",
+      action === "star" ? "Star updated." : "Project deleted.",
+      "success",
+    );
+    await fetchProjects(searchInput.value.trim());
+  } catch (error) {
+    showToast("Request failed", error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
 
 searchInput.addEventListener("input", () => {
   clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(searchProjects, searchDebounceDelay);
+  searchDebounceTimer = setTimeout(
+    () => fetchProjects(searchInput.value.trim()),
+    searchDebounceDelay,
+  );
 });
 
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   clearTimeout(searchDebounceTimer);
-  searchProjects();
+  fetchProjects(searchInput.value.trim());
 });
-
-function closeProjectModal() {
-  document.getElementById("add-project-modal").hidePopover();
-}
-
-async function addProject(event) {
-  event.preventDefault();
-  const submitButton = projectForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
-
-  try {
-    const response = await fetch(projectConfig.createEndpoint, {
-      method: "POST",
-      headers: { "X-CSRFToken": csrfToken },
-      body: new FormData(projectForm),
-    });
-    const result = await response.json().catch(() => ({}));
-
-    if (response.ok) {
-      projectForm.reset();
-      closeProjectModal();
-      showToast("Success", "New project added successfully!", "success");
-      fetchProjects(searchInput.value.trim());
-      return;
-    }
-
-    const errorMessages = result.errors
-      ? Object.values(result.errors).flat().map((error) => error.message)
-      : [result.message || `Something went wrong (status ${response.status}).`];
-    showToast("Failed to add project", errorMessages.join(" "), "error");
-  } catch (error) {
-    console.error("Error adding project:", error);
-    showToast(
-      "Failed to add project",
-      "Could not reach the server. Please try again.",
-      "error"
-    );
-  } finally {
-    submitButton.disabled = false;
-  }
-}
-
-if (projectForm) projectForm.addEventListener("submit", addProject);
 
 fetchProjects(searchInput.value.trim());

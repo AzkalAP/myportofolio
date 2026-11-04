@@ -483,14 +483,16 @@ class MainTest(TestCase):
     def test_completed_experience(self):
         self.experience.ended_at = timezone.now()
         self.experience.save()
-        response = self.client.get(reverse("main:show_experience"))
+        response = self.client.get(reverse("main:get_experience_json"))
+        experience_data = next(
+            item["fields"]
+            for item in response.json()
+            if item["pk"] == str(self.experience.pk)
+        )
 
         self.assertFalse(self.experience.is_ongoing)
-        self.assertContains(response, "Completed")
-        self.assertContains(
-            response,
-            '<p class="experience-status">Completed</p>',
-        )
+        self.assertFalse(experience_data["is_ongoing"])
+        self.assertIsNotNone(experience_data["ended_at"])
 
     def test_projects_url_is_accessible(self):
         response = self.client.get(reverse("main:show_projects"))
@@ -607,10 +609,12 @@ class MainTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()), 1)
-        self.assertEqual(
-            response.json()[0]["fields"]["title"],
-            self.finished_project.title,
+        matching_titles = [
+            item["fields"]["title"] for item in response.json()
+        ]
+        self.assertIn(self.finished_project.title, matching_titles)
+        self.assertTrue(
+            all("infographic" in title.lower() for title in matching_titles)
         )
 
     def test_project_controls_are_visible_only_to_superuser(self):

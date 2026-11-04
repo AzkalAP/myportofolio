@@ -53,12 +53,13 @@
 
     <form id="csrf-token-form" class="hide">{% csrf_token %}</form>
     <div id="project-config"
-         data-projects-endpoint="{% url 'main:get_projects_json' %}"
-         data-create-endpoint="{% url 'main:create_project_ajax' %}"
-         data-star-url-template="{% url 'main:toggle_star' 0 %}"
+            data-projects-endpoint="{% url 'api:project-list' %}"
+            data-detail-url-template="{% url 'api:project-detail' 0 %}"
+            data-star-url-template="{% url 'api:project-star' 0 %}"
+             data-login-url="{% url 'main:login' %}"
          data-update-url-template="{% url 'main:update_project' 0 %}"
-         data-delete-url-template="{% url 'main:delete_project' 0 %}"
          data-is-owner="{{ user.is_superuser|yesno:'true,false' }}"
+            data-is-authenticated="{{ user.is_authenticated|yesno:'true,false' }}"
          data-is-editor="{{ is_editor|yesno:'true,false' }}"></div>
     {% load static %}
     <script src="{% static 'js/projects.js' %}" defer></script>
