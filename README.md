@@ -15,6 +15,7 @@ A personal portfolio website for(and by :D) Azkal Azkiya Arifi Putra, a Computer
 - Django MVT architecture
 - Django ORM
 - Django built-in authentication, sessions, and groups
+- Django REST Framework (DRF)
 - Django CSRF protection
 - Fetch API for AJAX requests
 - Semantic HTML5
@@ -102,6 +103,7 @@ templates/login.html       Account login form
 templates/components/      Star and delete confirmation components
 static/css/style.css       Portfolio styles
 static/js/experience.js    Experience AJAX, search, stars, and form submission
+static/js/experience_edit.js  Experience edit form PATCH submission
 static/js/projects.js      Project AJAX, search, stars, and form submission
 static/js/toast.js         Toast notifications
 static/img/                Profile and project images
@@ -110,9 +112,14 @@ main/models.py             Experience and Project database models
 main/forms.py              Experience and Project forms
 main/views.py              View logic and JSON endpoints
 main/urls.py               Application URL routes
+main/serializers.py        Project and Experience API serializers
+main/permissions.py        Owner/Editor/read-only API permissions
+main/api_views.py          DRF list, detail, and star API views
+main/api_urls.py           Versioned API routes
 main/migrations/           Database migration files
 main/migrations/0007_experience_starred_by.py  Experience star relation
 main/tests.py              Experience and Project tests
+main/tests_api.py          Project and Experience DRF API tests
 ```
 
 ## Pages
@@ -134,8 +141,12 @@ main/tests.py              Experience and Project tests
 ## JSON Endpoints
 
 - `/api/experience/` - Public Experience JSON with star count and the current user's star state; supports `?title=` filtering
+- `/api/v1/experiences/` - Experience API list and owner-only create; supports `?title=` filtering
+- `/api/v1/experiences/<uuid>/` - Public Experience detail; Editor/owner can update, owner can delete
+- `/api/v1/experiences/<uuid>/star/` - Logged-in user star toggle
 - `/api/projects/` - Public Project records, with optional `?title=` filtering. The
 	response includes project fields but omits `starred_by` and user identities.
+- `/api/v1/projects/` - Tutorial 07 DRF Project API; the Experience API was added alongside it
 
 ## Testing
 
@@ -160,6 +171,9 @@ The tests cover:
 - Experience text sanitization and rejection of markup-only titles.
 - Experience loading, empty, and error states, plus the AJAX page skeleton.
 - Experience JSON title filtering.
+- Experience DRF list/detail/create/update/delete/star endpoints, serializer validation, role permissions, and CSRF behavior.
+- Experience API input cleaning and per-user star state.
+- Experience page and edit-form DRF endpoint configuration.
 - Project star toggling, star counts, and per-user star state.
 - Public project JSON field privacy.
 - Experience and Project JSON endpoints.
@@ -208,6 +222,13 @@ The tests cover:
 - Added success and error toast feedback, including server-side validation messages.
 - Added server-side HTML tag stripping for Experience text and safe client-side DOM rendering.
 - Added loading, empty, and error states while preserving visitor read access and Assignment 4 role permissions.
+
+### Week 6
+- Added a DRF serializer and versioned list, detail, and star endpoints for Experience.
+- Preserved visitor, regular-user, Editor, and owner permissions in the API.
+- Updated the Experience page to load, search, add, star, and delete through DRF without reloading the list.
+- Updated the Experience edit form to submit changes through the DRF PATCH endpoint.
+- Added API tests for roles, validation, stars, and session CSRF; all 82 `main` tests pass.
 
 ### Assignment 1
 1. So why I used `<section>`, `<header>`, `<main>` and many others so that we can differentiate each components according to its semantic meaning, making it more readable for me. Also, in modern website we need to think about accessibility and semantic tags allow screen readers to read each components' meaning. 
