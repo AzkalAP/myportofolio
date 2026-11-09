@@ -160,7 +160,13 @@ class MainTest(TestCase):
         self.assertContains(response, "Loading experiences...")
         self.assertContains(response, "Failed to load experience data")
         self.assertContains(response, "No experience has been added yet.")
-        self.assertContains(response, reverse("main:get_experience_json"))
+        self.assertContains(response, reverse("api:experience-list"))
+        self.assertContains(
+            response,
+            'data-star-url-template="/api/v1/experiences/'
+            '00000000-0000-0000-0000-000000000000/star/"',
+        )
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertContains(response, "js/experience.js")
         self.assertContains(response, f'href="{reverse("main:show_main")}"')
 
@@ -312,9 +318,9 @@ class MainTest(TestCase):
         response = self.client.get(reverse("main:show_experience"))
 
         self.assertNotContains(response, self.experience.title)
-        self.assertContains(response, reverse("main:get_experience_json"))
-        json_response = self.client.get(reverse("main:get_experience_json"))
-        experience_ids = [item["pk"] for item in json_response.json()]
+        self.assertContains(response, reverse("api:experience-list"))
+        api_response = self.client.get(reverse("api:experience-list"))
+        experience_ids = [item["id"] for item in api_response.json()]
         self.assertIn(str(self.experience.pk), experience_ids)
 
     def test_experience_page_has_management_controls(self):
@@ -322,6 +328,7 @@ class MainTest(TestCase):
 
         self.assertContains(response, 'data-is-owner="false"')
         self.assertContains(response, 'data-is-editor="false"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertNotContains(response, "Add Experience")
         self.assertNotContains(response, "add-experience-modal")
 
@@ -329,14 +336,16 @@ class MainTest(TestCase):
         response = self.client.get(reverse("main:show_experience"))
         self.assertContains(response, 'data-is-editor="true"')
         self.assertContains(response, 'data-is-owner="false"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertNotContains(response, "Add Experience")
         self.assertNotContains(response, "add-experience-modal")
 
         self.client.force_login(self.owner)
         response = self.client.get(reverse("main:show_experience"))
         self.assertContains(response, 'data-is-owner="true"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertContains(response, 'popovertarget="add-experience-modal"')
-        self.assertContains(response, reverse("main:create_experience_ajax"))
+        self.assertContains(response, reverse("api:experience-list"))
         self.assertContains(response, 'id="experience-create-form"')
         self.assertContains(response, 'name="title"')
         self.assertContains(response, 'name="category"')
@@ -355,6 +364,11 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "experience_form.html")
         self.assertContains(response, "Edit Experience")
         self.assertContains(response, self.experience.title)
+        self.assertContains(
+            response,
+            f'data-api-url="{reverse("api:experience-detail", args=[self.experience.pk])}"',
+        )
+        self.assertContains(response, "js/experience_edit.js")
 
     def test_create_experience_requires_valid_data(self):
         form = ExperienceForm(

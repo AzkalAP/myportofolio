@@ -40,6 +40,47 @@ function getExperienceUrl(template, experienceId) {
   );
 }
 
+function getCookie(name) {
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
+function getExperienceCsrfToken() {
+  return getCookie("csrftoken") || experienceCsrfToken;
+}
+
+function getApiErrorMessage(data, status) {
+  const messages = Object.values(data)
+    .flat()
+    .filter((value) => typeof value === "string")
+    .map(String);
+  return messages.join(" ") || `Request failed (HTTP ${status}).`;
+}
+
+async function writeExperience(url, method, payload) {
+  const headers = {
+    Accept: "application/json",
+    "X-CSRFToken": getExperienceCsrfToken(),
+  };
+  const options = { method, headers };
+  if (payload !== undefined) {
+    headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload);
+  }
+
+  const response = await fetch(url, options);
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data, response.status));
+  }
+  return data;
+}
+
 function getSafeImageUrl(value) {
   if (!value) return "";
 
@@ -52,14 +93,14 @@ function getSafeImageUrl(value) {
 }
 
 function createDeleteConfirmation(experience, deleteUrl) {
-  const experienceId = String(experience.pk).replace(/[^a-zA-Z0-9_-]/g, "");
+  const experienceId = String(experience.id).replace(/[^a-zA-Z0-9_-]/g, "");
   const popoverId = `delete-experience-${experienceId}`;
   const dialogTitleId = `${popoverId}-title`;
   const trigger = document.createElement("button");
   trigger.type = "button";
   trigger.className = "button button-danger";
   trigger.setAttribute("popovertarget", popoverId);
-  trigger.setAttribute("aria-label", `Delete ${experience.fields.title}`);
+  trigger.setAttribute("aria-label", `Delete ${experience.title}`);
   trigger.textContent = "Delete Experience";
 
   const popover = document.createElement("div");
@@ -96,7 +137,7 @@ function createDeleteConfirmation(experience, deleteUrl) {
   const experienceTitle = createTextElement(
     "strong",
     "",
-    experience.fields.title
+    experience.title
   );
   message.append(experienceTitle, document.createTextNode("?"));
 
@@ -110,30 +151,20 @@ function createDeleteConfirmation(experience, deleteUrl) {
   cancelButton.setAttribute("popovertargetaction", "hide");
   cancelButton.textContent = "Cancel";
 
-  const deleteForm = document.createElement("form");
-  deleteForm.method = "post";
-  deleteForm.action = deleteUrl;
-
-  const csrfInput = document.createElement("input");
-  csrfInput.type = "hidden";
-  csrfInput.name = "csrfmiddlewaretoken";
-  csrfInput.value = experienceCsrfToken;
-
   const confirmButton = document.createElement("button");
-  confirmButton.type = "submit";
+  confirmButton.type = "button";
   confirmButton.className = "button button-danger";
+  confirmButton.dataset.deleteUrl = deleteUrl;
   confirmButton.textContent = "Yes, Delete";
 
-  deleteForm.append(csrfInput, confirmButton);
-  actions.append(cancelButton, deleteForm);
+  actions.append(cancelButton, confirmButton);
   content.append(closeButton, title, message, actions);
   popover.append(backdrop, content);
 
   return { trigger, popover };
 }
 
-function buildExperienceCard(item) {
-  const experience = item.fields;
+function buildExperienceCard(experience) {
   const article = document.createElement("article");
   article.className = "experience-card";
 
@@ -168,7 +199,7 @@ function buildExperienceCard(item) {
     }`;
     starButton.dataset.starUrl = getExperienceUrl(
       experienceConfig.starUrlTemplate,
-      item.pk
+      experience.id
     );
     starButton.setAttribute("aria-pressed", String(experience.is_starred));
     starButton.setAttribute(
@@ -205,7 +236,7 @@ function buildExperienceCard(item) {
     editLink.className = "button";
     editLink.href = getExperienceUrl(
       experienceConfig.updateUrlTemplate,
-      item.pk
+      experience.id
     );
     editLink.textContent = "Edit Experience";
     actions.append(editLink);
@@ -215,8 +246,8 @@ function buildExperienceCard(item) {
 
   if (isExperienceOwner) {
     const deleteConfirmation = createDeleteConfirmation(
-      item,
-      getExperienceUrl(experienceConfig.deleteUrlTemplate, item.pk)
+      experience,
+      getExperienceUrl(experienceConfig.deleteUrlTemplate, experience.id)
     );
     actions.append(deleteConfirmation.trigger);
     article.append(deleteConfirmation.popover);
@@ -287,24 +318,24 @@ document.getElementById("experience-retry").addEventListener("click", () => {
 
 experienceGrid.addEventListener("click", async (event) => {
   const starButton = event.target.closest("button[data-star-url]");
-  if (!starButton) return;
+  const deleteButton = event.target.closest("button[data-delete-url]");
+  if (!starButton && !deleteButton) return;
 
-  starButton.disabled = true;
+  const button = starButton || deleteButton;
+  button.disabled = true;
   try {
-    const response = await fetch(starButton.dataset.starUrl, {
-      method: "POST",
-      headers: { "X-CSRFToken": experienceCsrfToken },
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(result.message || "Could not update the star.");
+    if (starButton) {
+      await writeExperience(starButton.dataset.starUrl, "POST");
+      showToast("Star updated", "Your experience star was saved.", "success");
+    } else {
+      await writeExperience(deleteButton.dataset.deleteUrl, "DELETE");
+      deleteButton.closest("[popover]").hidePopover();
+      showToast("Experience deleted", "The experience was deleted.", "success");
     }
-
-    showToast("Star updated", "Your experience star was saved.", "success");
-    fetchExperiences(experienceSearchInput.value.trim());
+    await fetchExperiences(experienceSearchInput.value.trim());
   } catch (error) {
-    showToast("Star update failed", error.message, "error");
-    starButton.disabled = false;
+    showToast("Experience update failed", error.message, "error");
+    button.disabled = false;
   }
 });
 
@@ -316,45 +347,24 @@ if (experienceCreateForm) {
     );
     submitButton.disabled = true;
     const formData = new FormData(experienceCreateForm);
-    const formCsrfToken = formData.get("csrfmiddlewaretoken") || experienceCsrfToken;
+    const payload = Object.fromEntries(
+      ["title", "description", "category", "thumbnail", "ended_at"].map(
+        (name) => [name, formData.get(name)]
+      )
+    );
+    if (!payload.ended_at) payload.ended_at = null;
 
     try {
-      const response = await fetch(experienceConfig.createEndpoint, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "X-CSRFToken": String(formCsrfToken),
-        },
-        body: formData,
-      });
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        const fieldErrors = result.errors
-          ? Object.values(result.errors)
-              .flatMap((errors) => errors)
-              .map((error) => error.message || String(error))
-          : [];
-        const message =
-          fieldErrors.join(" ") ||
-          result.message ||
-          `Something went wrong (status ${response.status}).`;
-        showToast("Failed to add experience", message, "error");
-        return;
-      }
+      await writeExperience(experienceConfig.createEndpoint, "POST", payload);
 
       experienceCreateForm.reset();
       experienceAddModal.hidePopover();
-      showToast(
-        "Success",
-        result.message || "Experience added successfully.",
-        "success"
-      );
-      fetchExperiences(experienceSearchInput.value.trim());
+      showToast("Success", "Experience added successfully.", "success");
+      await fetchExperiences(experienceSearchInput.value.trim());
     } catch (error) {
       showToast(
         "Failed to add experience",
-        "Could not reach the server. Please try again.",
+        error.message,
         "error"
       );
     } finally {

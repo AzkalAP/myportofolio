@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block meta %}
     <title>Edit Experience - {{ name }}</title>
@@ -9,9 +10,12 @@
         <section class="experience-section">
             <div class="container">
                     <h1>Edit Experience</h1>
-                <form method="post"
+                    <form id="experience-edit-form"
+                        method="post"
                         action="{% url 'main:update_experience' experience.id %}"
-                      class="project-form">
+                        data-api-url="{% url 'api:experience-detail' experience.id %}"
+                        data-list-url="{% url 'main:show_experience' %}"
+                        class="project-form">
                     {% csrf_token %}
                     {% for field in form %}
                         <div class="form-group">
@@ -30,4 +34,5 @@
             </div>
         </section>
     </main>
+    <script src="{% static 'js/experience_edit.js' %}" defer></script>
 {% endblock content %}

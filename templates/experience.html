@@ -54,11 +54,13 @@
 
     <form id="experience-csrf-form" class="hide">{% csrf_token %}</form>
     <div id="experience-config"
-         data-experiences-endpoint="{% url 'main:get_experience_json' %}"
-         data-create-endpoint="{% url 'main:create_experience_ajax' %}"
-         data-star-url-template="{% url 'main:toggle_experience_star' '00000000-0000-0000-0000-000000000000' %}"
+            data-experiences-endpoint="{% url 'api:experience-list' %}"
+            data-create-endpoint="{% url 'api:experience-list' %}"
+            data-detail-url-template="{% url 'api:experience-detail' '00000000-0000-0000-0000-000000000000' %}"
+            data-star-url-template="{% url 'api:experience-star' '00000000-0000-0000-0000-000000000000' %}"
+            data-login-url="{% url 'main:login' %}"
          data-update-url-template="{% url 'main:update_experience' '00000000-0000-0000-0000-000000000000' %}"
-         data-delete-url-template="{% url 'main:delete_experience' '00000000-0000-0000-0000-000000000000' %}"
+            data-delete-url-template="{% url 'api:experience-detail' '00000000-0000-0000-0000-000000000000' %}"
          data-is-owner="{{ is_owner|yesno:'true,false' }}"
          data-is-editor="{{ is_editor|yesno:'true,false' }}"
          data-is-authenticated="{{ is_authenticated|yesno:'true,false' }}"></div>
